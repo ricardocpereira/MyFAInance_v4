@@ -1,0 +1,32 @@
+{
+  "name": "myfainance_v2",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "dev:web": "npm --prefix apps/web run dev",
+    "dev:mobile": "npm --prefix apps/mobile run start",
+    "dev:api": "python -m uvicorn app.main:app --reload --app-dir apps/api",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ricardocpereira/MyFAInance_v2.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ricardocpereira/MyFAInance_v2/issues"
+  },
+  "homepage": "https://github.com/ricardocpereira/MyFAInance_v2#readme",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@nx/devkit": "^22.3.3"
+  }
+}

@@ -1,0 +1,43 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Syne:wght@600;700&display=swap");
+
+:root {
+  font-family: "Space Grotesk", sans-serif;
+  color: #dfe7f3;
+  background-color: #05070d;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  --alloc-0: #2ad68d;
+  --alloc-1: #1b8af2;
+  --alloc-2: #9b5cff;
+  --alloc-3: #f2b441;
+  --alloc-4: #ea5fd6;
+  --alloc-5: #6fd6ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #11223a 0%, #05070d 55%, #05070d 100%);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: "Syne", sans-serif;
+  margin: 0;
+}
+
+p {
+  margin: 0;
+}
