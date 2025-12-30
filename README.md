@@ -1,4 +1,4 @@
-# MyFAInance v2
+# MyFAInance v3
 
 Personal finance portfolio tracker with a FastAPI backend, React web app, and React Native (Expo) mobile app.
 

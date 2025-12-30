@@ -1,5 +1,5 @@
 {
-  "name": "myfainance_v2",
+  "name": "myfainance_v3",
   "version": "1.0.0",
   "description": "",
   "private": true,
@@ -12,16 +12,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ricardocpereira/MyFAInance_v2.git"
+    "url": "git+https://github.com/ricardocpereira/MyFAInance_v3.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/ricardocpereira/MyFAInance_v2/issues"
+    "url": "https://github.com/ricardocpereira/MyFAInance_v3/issues"
   },
-  "homepage": "https://github.com/ricardocpereira/MyFAInance_v2#readme",
+  "homepage": "https://github.com/ricardocpereira/MyFAInance_v3#readme",
   "workspaces": [
     "apps/*",
     "packages/*"

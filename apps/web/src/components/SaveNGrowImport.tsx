@@ -234,7 +234,7 @@ function SaveNGrowImport({
           <button
             className="ghost-btn"
             type="button"
-            onClick={handlePreview}
+            onClick={() => handlePreview()}
             disabled={loadingPreview}
           >
             {loadingPreview

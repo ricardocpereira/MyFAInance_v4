@@ -169,7 +169,7 @@ function SantanderImport({
             <button
               className="ghost-btn"
               type="button"
-              onClick={handlePreview}
+              onClick={() => handlePreview()}
               disabled={loadingPreview}
             >
               {loadingPreview ? t.imports.santander.previewing : t.imports.santander.preview}

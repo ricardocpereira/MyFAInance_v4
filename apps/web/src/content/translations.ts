@@ -208,6 +208,7 @@ export const translations = {
         previewError: "Unable to preview BancoInvest file.",
         saveError: "Unable to save BancoInvest import.",
         saveSuccess: "BancoInvest import saved.",
+        loadError: "Unable to load BancoInvest imports.",
         history: "Imports",
         loading: "Loading imports...",
         noEntries: "No BancoInvest imports yet.",
@@ -243,6 +244,7 @@ export const translations = {
         previewError: "Unable to preview XTB files.",
         saveError: "Unable to save XTB import.",
         saveSuccess: "XTB import saved.",
+        loadError: "Unable to load XTB imports.",
         warnings: "Warnings",
         previewTitle: "Preview files",
         history: "Imports",
@@ -318,6 +320,7 @@ export const translations = {
         previewError: "Unable to preview Save N Grow file.",
         saveError: "Unable to save Save N Grow import.",
         saveSuccess: "Save N Grow import saved.",
+        loadError: "Unable to load Save N Grow imports.",
         previewTitle: "Preview rows",
         invested: "Invested",
         currentValue: "Current value",
@@ -356,6 +359,7 @@ export const translations = {
         previewError: "Unable to preview AforroNet file.",
         saveError: "Unable to save AforroNet import.",
         saveSuccess: "AforroNet import saved.",
+        loadError: "Unable to load AforroNet imports.",
         previewTitle: "Preview rows",
         invested: "Invested",
         currentValue: "Current value",
@@ -739,6 +743,7 @@ export const translations = {
         previewError: "Nao foi possivel ler o ficheiro BancoInvest.",
         saveError: "Nao foi possivel guardar o import BancoInvest.",
         saveSuccess: "Import BancoInvest guardado.",
+        loadError: "Nao foi possivel carregar os imports BancoInvest.",
         history: "Imports",
         loading: "A carregar imports...",
         noEntries: "Sem imports BancoInvest.",
@@ -774,6 +779,7 @@ export const translations = {
         previewError: "Nao foi possivel ler ficheiros XTB.",
         saveError: "Nao foi possivel guardar o import XTB.",
         saveSuccess: "Import XTB guardado.",
+        loadError: "Nao foi possivel carregar os imports XTB.",
         warnings: "Avisos",
         previewTitle: "Pre-visualizacao",
         history: "Imports",
@@ -849,6 +855,7 @@ export const translations = {
         previewError: "Nao foi possivel ler o ficheiro Save N Grow.",
         saveError: "Nao foi possivel guardar o import.",
         saveSuccess: "Import Save N Grow guardado.",
+        loadError: "Nao foi possivel carregar os imports Save N Grow.",
         previewTitle: "Pre-visualizacao",
         invested: "Investido",
         currentValue: "Valor atual",
@@ -886,6 +893,7 @@ export const translations = {
         previewError: "Nao foi possivel ler o ficheiro AforroNet.",
         saveError: "Nao foi possivel guardar o import AforroNet.",
         saveSuccess: "Import AforroNet guardado.",
+        loadError: "Nao foi possivel carregar os imports AforroNet.",
         previewTitle: "Pre-visualizacao",
         invested: "Investido",
         currentValue: "Valor atual",
@@ -1269,6 +1277,7 @@ export const translations = {
         previewError: "No se pudo leer el archivo BancoInvest.",
         saveError: "No se pudo guardar el import BancoInvest.",
         saveSuccess: "Import BancoInvest guardado.",
+        loadError: "No se pudieron cargar imports BancoInvest.",
         history: "Imports",
         loading: "Cargando imports...",
         noEntries: "Sin imports BancoInvest.",
@@ -1304,6 +1313,7 @@ export const translations = {
         previewError: "No se pudieron leer archivos XTB.",
         saveError: "No se pudo guardar el import XTB.",
         saveSuccess: "Import XTB guardado.",
+        loadError: "No se pudieron cargar imports XTB.",
         warnings: "Avisos",
         previewTitle: "Previsualizacion",
         history: "Imports",
@@ -1379,6 +1389,7 @@ export const translations = {
         previewError: "No se pudo leer el archivo Save N Grow.",
         saveError: "No se pudo guardar el import.",
         saveSuccess: "Import Save N Grow guardado.",
+        loadError: "No se pudieron cargar imports Save N Grow.",
         previewTitle: "Vista previa",
         invested: "Invertido",
         currentValue: "Valor actual",
@@ -1416,6 +1427,7 @@ export const translations = {
         previewError: "No se pudo leer el archivo AforroNet.",
         saveError: "No se pudo guardar el import AforroNet.",
         saveSuccess: "Import AforroNet guardado.",
+        loadError: "No se pudieron cargar imports AforroNet.",
         previewTitle: "Vista previa",
         invested: "Invertido",
         currentValue: "Valor actual",
@@ -1592,6 +1604,6 @@ export const translations = {
       spanish: "Espanol"
     }
   }
-} as const;
+};
 
 export type Translation = typeof translations.en;
