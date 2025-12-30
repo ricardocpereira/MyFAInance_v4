@@ -15,6 +15,7 @@ import urllib.request
 from io import BytesIO
 from datetime import datetime, timedelta
 from email.message import EmailMessage
+from contextlib import contextmanager
 
 from fastapi import FastAPI, Header, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -228,10 +229,18 @@ class CategoryAddRequest(BaseModel):
     category: str
 
 
+@contextmanager
 def _db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def _init_db() -> None:

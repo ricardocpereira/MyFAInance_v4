@@ -28,7 +28,7 @@ class PortfolioDeleteTest(unittest.TestCase):
         with self.main._db_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO portfolio_category_settings
+                INSERT OR REPLACE INTO portfolio_category_settings
                 (portfolio_id, category, is_investment, updated_at)
                 VALUES (?, ?, ?, ?)
                 """,
