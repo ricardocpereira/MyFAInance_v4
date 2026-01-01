@@ -12,6 +12,7 @@ import Portfolios from "./pages/Portfolios";
 import WipPage from "./pages/WipPage";
 import Login from "./pages/Login";
 import Holdings from "./pages/Holdings";
+import BankingTransactions from "./pages/BankingTransactions";
 import { type Language, translations } from "./content/translations";
 import PortfolioModal from "./components/PortfolioModal";
 
@@ -133,7 +134,7 @@ function App() {
     () => [
       { path: "/portfolios", label: t.nav.portfolios },
       { path: "/holdings", label: t.nav.stocks },
-      { path: "/transactions", label: t.nav.transactions, wip: true },
+      { path: "/transactions", label: t.nav.transactions },
       { path: "/mygoals", label: t.nav.goals, wip: true }
     ],
     [t]
@@ -404,7 +405,11 @@ function App() {
             path="/transactions"
             element={
               isAuthenticated ? (
-                <WipPage title={t.nav.transactions} label={t.wip.label} message={t.wip.message} />
+                <BankingTransactions
+                  t={t}
+                  token={authToken}
+                  portfolio={activePortfolio}
+                />
               ) : (
                 <Navigate to="/" replace />
               )

@@ -1,3 +1,4 @@
+import csv
 import hashlib
 import json
 import logging
@@ -17,7 +18,7 @@ from datetime import datetime, timedelta
 from email.message import EmailMessage
 from contextlib import contextmanager
 
-from fastapi import FastAPI, Header, HTTPException, UploadFile, File
+from fastapi import FastAPI, Header, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openpyxl import load_workbook
@@ -45,6 +46,99 @@ PRICE_CACHE_TTL_MINUTES = int(os.getenv("PRICE_CACHE_TTL_MINUTES", "60"))
 DB_PATH = os.getenv(
     "DB_PATH", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "app.db"))
 )
+
+BANKING_CATEGORY_TREE = {
+    "Sem categoria": ["Sem subcategoria"],
+    "Alimentacao": [
+        "Sem subcategoria",
+        "Cafetaria",
+        "Mantimentos",
+        "Restauracao",
+        "Takeaway",
+        "Talho",
+    ],
+    "Cuidados pessoais": ["Sem subcategoria"],
+    "Despesas bancarias": [
+        "Sem subcategoria",
+        "Cheques",
+        "Comissao de cartao",
+        "Manutencao do deposito",
+    ],
+    "Habitacao": [
+        "Sem subcategoria",
+        "Condominio",
+        "Electricidade",
+        "Esgotos",
+        "Gas",
+        "TV & Internet",
+        "Agua",
+    ],
+    "Habitacao (recheio)": [
+        "Sem subcategoria",
+        "Decoracao",
+        "Eletrodomesticos",
+        "Mobilia",
+    ],
+    "Impostos": ["Sem subcategoria", "IRS", "IUC", "Imposto de Selo"],
+    "Juros": ["Sem subcategoria"],
+    "Automovel": ["Sem subcategoria"],
+    "Lazer": ["Sem subcategoria", "Cinema", "Desporto", "Discoteca", "Museus"],
+    "Saude": ["Sem subcategoria", "Consultas", "Fisioterapia", "Medicamentos", "Urgencias"],
+    "Telemovel": ["Sem subcategoria"],
+    "Transportes": [
+        "Sem subcategoria",
+        "Comboio",
+        "Combustivel",
+        "Estacionamento",
+        "Inspecao",
+        "Metro",
+        "Portagem",
+    ],
+    "Seguros": ["Sem subcategoria"],
+    "Vencimentos": ["Sem subcategoria"],
+    "Vestuario": ["Sem subcategoria"],
+}
+BANKING_DEFAULT_CATEGORY = "Sem categoria"
+BANKING_DEFAULT_SUBCATEGORY = "Sem subcategoria"
+BANKING_CATEGORY_KEYWORDS = [
+    ("Alimentacao", "Restauracao", ["restaurante", "restauracao", "pizza", "sushi", "burger", "hamburguer"]),
+    ("Alimentacao", "Cafetaria", ["cafe", "cafeteria", "pastelaria"]),
+    ("Alimentacao", "Takeaway", ["takeaway", "ubereats", "uber eats", "glovo", "deliveroo"]),
+    ("Alimentacao", "Mantimentos", ["supermercado", "continente", "pingo doce", "lidl", "aldi", "auchan", "minipreco"]),
+    ("Alimentacao", "Talho", ["talho", "carnes"]),
+    ("Transportes", "Combustivel", ["combustivel", "gasolina", "gasoleo", "galp", "repsol", "bp"]),
+    ("Transportes", "Metro", ["metro"]),
+    ("Transportes", "Comboio", ["comboio", "cp"]),
+    ("Transportes", "Portagem", ["portagem", "via verde"]),
+    ("Transportes", "Estacionamento", ["estacionamento", "parking", "parque"]),
+    ("Telemovel", BANKING_DEFAULT_SUBCATEGORY, ["vodafone", "nos", "meo", "tmn"]),
+    ("Saude", "Medicamentos", ["farmacia"]),
+    ("Saude", "Consultas", ["consulta", "clinica", "hospital"]),
+    ("Saude", "Fisioterapia", ["fisioterapia"]),
+    ("Lazer", "Cinema", ["cinema"]),
+    ("Lazer", "Desporto", ["ginasio", "gym", "fitness"]),
+    ("Lazer", "Discoteca", ["discoteca", "bar"]),
+    ("Lazer", "Museus", ["museu"]),
+    ("Habitacao", "Condominio", ["condominio"]),
+    ("Habitacao", "Electricidade", ["electricidade", "edp", "electric"]),
+    ("Habitacao", "Gas", ["gas"]),
+    ("Habitacao", "Agua", ["agua"]),
+    ("Habitacao", "TV & Internet", ["internet", "tv"]),
+    ("Despesas bancarias", "Comissao de cartao", ["comissao", "cartao", "card fee"]),
+    ("Despesas bancarias", "Manutencao do deposito", ["manutencao", "quota"]),
+    ("Impostos", "IRS", ["irs"]),
+    ("Impostos", "IUC", ["iuc"]),
+    ("Impostos", "Imposto de Selo", ["imposto de selo", "selo"]),
+    ("Juros", BANKING_DEFAULT_SUBCATEGORY, ["juros", "interest"]),
+    ("Seguros", BANKING_DEFAULT_SUBCATEGORY, ["seguro", "insurance"]),
+    ("Vencimentos", BANKING_DEFAULT_SUBCATEGORY, ["salario", "vencimento", "salary"]),
+    ("Vestuario", BANKING_DEFAULT_SUBCATEGORY, ["zara", "hm", "h&m", "bershka", "pull&bear", "roupa"]),
+    ("Cuidados pessoais", BANKING_DEFAULT_SUBCATEGORY, ["cabeleireiro", "barbeiro", "cosmet", "spa", "estetica"]),
+    ("Automovel", BANKING_DEFAULT_SUBCATEGORY, ["oficina", "mecanico", "auto"]),
+    ("Habitacao (recheio)", "Eletrodomesticos", ["eletrodomestico", "eletro"]),
+    ("Habitacao (recheio)", "Mobilia", ["mobilia", "sofa", "cama"]),
+    ("Habitacao (recheio)", "Decoracao", ["decoracao", "ikea"]),
+]
 
 
 class RegisterRequest(BaseModel):
@@ -212,6 +306,31 @@ class HoldingMetadataRequest(BaseModel):
 class PriceRefreshRequest(BaseModel):
     tickers: list[str] | None = None
     force: bool = False
+
+
+class BankingPreviewRow(BaseModel):
+    cells: list[str | float | int | None]
+    include: bool = True
+
+
+class BankingCommitRequest(BaseModel):
+    source_file: str
+    file_hash: str
+    institution: str
+    columns: list[str]
+    mapping: dict[str, int | None]
+    rows: list[BankingPreviewRow]
+
+
+class BankingCategoryUpdateRequest(BaseModel):
+    category: str
+    subcategory: str | None = None
+
+
+class BankingBudgetRequest(BaseModel):
+    category: str
+    amount: float
+    month: str | None = None
 
 
 
@@ -486,6 +605,68 @@ def _init_db() -> None:
                 is_investment INTEGER NOT NULL,
                 updated_at TEXT NOT NULL,
                 UNIQUE(portfolio_id, category)
+            );
+            CREATE TABLE IF NOT EXISTS banking_institutions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(portfolio_id, name)
+            );
+            CREATE TABLE IF NOT EXISTS banking_categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                parent_id INTEGER,
+                name TEXT NOT NULL,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                UNIQUE(portfolio_id, parent_id, name)
+            );
+            CREATE TABLE IF NOT EXISTS banking_imports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                institution TEXT NOT NULL,
+                source_file TEXT NOT NULL,
+                file_hash TEXT NOT NULL,
+                imported_at TEXT NOT NULL,
+                row_count INTEGER NOT NULL,
+                UNIQUE(portfolio_id, file_hash)
+            );
+            CREATE TABLE IF NOT EXISTS banking_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                import_id INTEGER NOT NULL,
+                portfolio_id INTEGER NOT NULL,
+                institution TEXT NOT NULL,
+                tx_date TEXT NOT NULL,
+                description TEXT NOT NULL,
+                amount REAL NOT NULL,
+                balance REAL,
+                currency TEXT NOT NULL,
+                category TEXT NOT NULL,
+                subcategory TEXT NOT NULL,
+                raw_json TEXT,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS banking_category_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                institution TEXT NOT NULL,
+                match_type TEXT NOT NULL,
+                match_value TEXT NOT NULL,
+                category TEXT NOT NULL,
+                subcategory TEXT,
+                updated_at TEXT NOT NULL,
+                UNIQUE(portfolio_id, institution, match_type, match_value)
+            );
+            CREATE TABLE IF NOT EXISTS banking_budgets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                month TEXT NOT NULL,
+                amount REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(portfolio_id, category, month)
             );
             """
         )
@@ -956,6 +1137,536 @@ def _parse_number(value: str | float | int | None) -> float | None:
     return -parsed if negative else parsed
 
 
+def _normalize_tickers(tickers: list[str] | None) -> list[str]:
+    if not tickers:
+        return []
+    seen: set[str] = set()
+    normalized: list[str] = []
+    for ticker in tickers:
+        value = (ticker or "").strip().upper()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        normalized.append(value)
+    return normalized
+
+
+def _fix_mojibake(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return str(value)
+    if "Ã" in value or "Â" in value:
+        try:
+            return value.encode("latin-1").decode("utf-8")
+        except UnicodeError:
+            return value
+    return value
+
+
+def _parse_transaction_date(value: str | datetime | None) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    text = str(value).strip()
+    if not text:
+        return None
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(text[:10], fmt).date().isoformat()
+        except ValueError:
+            continue
+    if " " in text:
+        try:
+            return datetime.fromisoformat(text).date().isoformat()
+        except ValueError:
+            pass
+    return _date_key(text)
+
+
+def _detect_delimiter(sample: str) -> str:
+    for delimiter in (";", ",", "\t", "|"):
+        if delimiter in sample:
+            return delimiter
+    return ","
+
+
+def _load_rows_from_text(text: str) -> list[list[str | None]]:
+    rows: list[list[str | None]] = []
+    sample = text.splitlines()[0] if text.splitlines() else ""
+    delimiter = _detect_delimiter(sample)
+    for row in csv.reader(text.splitlines(), delimiter=delimiter):
+        rows.append([_fix_mojibake(cell) for cell in row])
+    return rows
+
+
+def _load_rows_from_excel(file_bytes: bytes, filename: str) -> list[list[str | float | int | None]]:
+    rows: list[list[str | float | int | None]] = []
+    if filename.lower().endswith(".xls"):
+        book = xlrd.open_workbook(file_contents=file_bytes)
+        sheet = book.sheet_by_index(0)
+        for row_idx in range(sheet.nrows):
+            rows.append([_fix_mojibake(cell) for cell in sheet.row_values(row_idx)])
+        return rows
+    workbook = load_workbook(BytesIO(file_bytes), data_only=True)
+    sheet = workbook.active
+    for row in sheet.iter_rows(values_only=True):
+        rows.append([_fix_mojibake(cell) for cell in row])
+    return rows
+
+
+def _split_csv_column_rows(
+    rows: list[list[str | float | int | None]],
+) -> list[list[str | float | int | None]]:
+    if not rows:
+        return rows
+    if not all(len(row) == 1 and isinstance(row[0], str) for row in rows):
+        return rows
+    if not rows[0] or "," not in str(rows[0][0]):
+        return rows
+    parsed: list[list[str | None]] = []
+    for row in rows:
+        value = str(row[0]) if row and row[0] is not None else ""
+        for csv_row in csv.reader([value], delimiter=_detect_delimiter(value)):
+            parsed.append([_fix_mojibake(cell) for cell in csv_row])
+    return parsed
+
+
+def _find_header_row(rows: list[list[str | float | int | None]]) -> int | None:
+    header_keywords = {
+        "date": {
+            "data",
+            "date",
+            "data operacao",
+            "data lanc",
+            "data lanc.",
+            "data valor",
+            "data de inicio",
+            "data de conclusao",
+        },
+        "description": {"descricao", "descr", "description"},
+        "amount": {"montante", "valor", "amount"},
+        "balance": {"saldo", "balance"},
+        "currency": {"moeda", "currency"},
+        "debit": {"debito"},
+        "credit": {"credito"},
+    }
+    for idx, row in enumerate(rows[:40]):
+        hits = 0
+        for cell in row:
+            if not cell:
+                continue
+            key = _normalize_text(str(cell))
+            for words in header_keywords.values():
+                if any(word in key for word in words):
+                    hits += 1
+                    break
+        if hits >= 2:
+            return idx
+    return None
+
+
+def _suggest_banking_mapping(columns: list[str]) -> dict[str, int | None]:
+    mapping: dict[str, int | None] = {
+        "date": None,
+        "description": None,
+        "amount": None,
+        "balance": None,
+        "currency": None,
+        "debit": None,
+        "credit": None,
+    }
+    for idx, label in enumerate(columns):
+        key = _normalize_text(label)
+        if mapping["date"] is None and "data" in key:
+            mapping["date"] = idx
+            continue
+        if mapping["description"] is None and ("descr" in key or "description" in key):
+            mapping["description"] = idx
+            continue
+        if mapping["balance"] is None and "saldo" in key:
+            mapping["balance"] = idx
+            continue
+        if mapping["currency"] is None and ("moeda" in key or "curr" in key):
+            mapping["currency"] = idx
+            continue
+        if mapping["debit"] is None and "deb" in key:
+            mapping["debit"] = idx
+            continue
+        if mapping["credit"] is None and "cred" in key:
+            mapping["credit"] = idx
+            continue
+        if "montante" in key or "amount" in key:
+            mapping["amount"] = idx
+            continue
+        if mapping["amount"] is None and "valor" in key and "data" not in key:
+            mapping["amount"] = idx
+    return mapping
+
+
+def _normalize_mapping(mapping: dict[str, int | None]) -> dict[str, int | None]:
+    normalized: dict[str, int | None] = {}
+    for key, value in mapping.items():
+        normalized[key] = value if isinstance(value, int) else None
+    return normalized
+
+
+def _build_banking_items(
+    rows: list[list[str | float | int | None]],
+    columns: list[str],
+    mapping: dict[str, int | None],
+    currency_fallback: str,
+) -> tuple[list[dict], list[str]]:
+    warnings: list[str] = []
+    items: list[dict] = []
+    mapping = _normalize_mapping(mapping)
+    for idx, row in enumerate(rows):
+        cells = [cell if cell is not None else "" for cell in row]
+
+        def cell_at(key: str) -> str | float | int | None:
+            col_idx = mapping.get(key)
+            if col_idx is None or col_idx >= len(cells):
+                return None
+            return cells[col_idx]
+
+        date_value = _parse_transaction_date(cell_at("date"))
+        description_value = _normalize_optional_text(_fix_mojibake(cell_at("description")))
+        debit_value = _parse_number(cell_at("debit")) if mapping.get("debit") is not None else None
+        credit_value = (
+            _parse_number(cell_at("credit")) if mapping.get("credit") is not None else None
+        )
+        if debit_value is not None or credit_value is not None:
+            debit_value = debit_value or 0.0
+            credit_value = credit_value or 0.0
+            amount_value = credit_value - abs(debit_value)
+        else:
+            amount_value = _parse_number(cell_at("amount"))
+        balance_value = _parse_number(cell_at("balance"))
+        currency_value = (
+            _normalize_optional_text(_fix_mojibake(cell_at("currency")))
+            or currency_fallback
+        )
+        if not date_value or not description_value or amount_value is None:
+            warnings.append(f"Row {idx + 1} skipped: missing required values.")
+            continue
+        items.append(
+            {
+                "tx_date": date_value,
+                "description": description_value,
+                "amount": float(amount_value),
+                "balance": float(balance_value) if balance_value is not None else None,
+                "currency": currency_value,
+                "category": BANKING_DEFAULT_CATEGORY,
+                "subcategory": BANKING_DEFAULT_SUBCATEGORY,
+                "raw": dict(zip(columns, cells)),
+            }
+        )
+    return items, warnings
+
+
+def _ensure_banking_categories(portfolio_id: int) -> None:
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        existing = conn.execute(
+            "SELECT COUNT(*) AS total FROM banking_categories WHERE portfolio_id = ?",
+            (portfolio_id,),
+        ).fetchone()
+        if existing and existing["total"] > 0:
+            return
+        for parent_name, children in BANKING_CATEGORY_TREE.items():
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO banking_categories (portfolio_id, parent_id, name, is_default, created_at)
+                VALUES (?, NULL, ?, 1, ?)
+                """,
+                (portfolio_id, parent_name, now),
+            )
+            parent_id = conn.execute(
+                """
+                SELECT id FROM banking_categories
+                WHERE portfolio_id = ? AND parent_id IS NULL AND name = ?
+                """,
+                (portfolio_id, parent_name),
+            ).fetchone()
+            if not parent_id:
+                continue
+            for child_name in children:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO banking_categories (portfolio_id, parent_id, name, is_default, created_at)
+                    VALUES (?, ?, ?, 1, ?)
+                    """,
+                    (portfolio_id, parent_id["id"], child_name, now),
+                )
+
+
+def _list_banking_categories(portfolio_id: int) -> list[dict]:
+    with _db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, parent_id, name
+            FROM banking_categories
+            WHERE portfolio_id = ?
+            ORDER BY parent_id NULLS FIRST, name
+            """,
+            (portfolio_id,),
+        ).fetchall()
+    by_parent: dict[int | None, list[dict]] = {}
+    for row in rows:
+        by_parent.setdefault(row["parent_id"], []).append(
+            {"id": row["id"], "name": row["name"]}
+        )
+    result: list[dict] = []
+    for parent in by_parent.get(None, []):
+        children = by_parent.get(parent["id"], [])
+        result.append(
+            {
+                "name": parent["name"],
+                "subcategories": [child["name"] for child in children],
+            }
+        )
+    return result
+
+
+def _normalize_banking_description(value: str | None) -> str | None:
+    if not value:
+        return None
+    return _normalize_text(value)
+
+
+def _upsert_banking_category(
+    portfolio_id: int, category: str | None, subcategory: str | None = None
+) -> None:
+    category_name = (category or "").strip()
+    if not category_name:
+        return
+    subcategory_name = (subcategory or "").strip()
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        parent_row = conn.execute(
+            """
+            SELECT id
+            FROM banking_categories
+            WHERE portfolio_id = ? AND parent_id IS NULL AND lower(name) = ?
+            """,
+            (portfolio_id, _normalize_text(category_name)),
+        ).fetchone()
+        if parent_row:
+            parent_id = parent_row["id"]
+        else:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO banking_categories (portfolio_id, parent_id, name, is_default, created_at)
+                VALUES (?, NULL, ?, 0, ?)
+                """,
+                (portfolio_id, category_name, now),
+            )
+            parent_id = conn.execute(
+                """
+                SELECT id
+                FROM banking_categories
+                WHERE portfolio_id = ? AND parent_id IS NULL AND lower(name) = ?
+                """,
+                (portfolio_id, _normalize_text(category_name)),
+            ).fetchone()["id"]
+        if subcategory_name:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO banking_categories (portfolio_id, parent_id, name, is_default, created_at)
+                VALUES (?, ?, ?, 0, ?)
+                """,
+                (portfolio_id, parent_id, subcategory_name, now),
+            )
+
+
+def _find_banking_rule(
+    portfolio_id: int, institution: str, description: str | None
+) -> dict | None:
+    normalized_desc = _normalize_banking_description(description)
+    if not normalized_desc:
+        return None
+    normalized_inst = _normalize_text(institution or "")
+    with _db_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT category, subcategory
+            FROM banking_category_rules
+            WHERE portfolio_id = ? AND institution = ? AND match_type = 'exact' AND match_value = ?
+            """,
+            (portfolio_id, normalized_inst, normalized_desc),
+        ).fetchone()
+    if not row:
+        return None
+    return {"category": row["category"], "subcategory": row["subcategory"]}
+
+
+def _learn_banking_rule(
+    portfolio_id: int,
+    institution: str,
+    description: str | None,
+    category: str | None,
+    subcategory: str | None,
+) -> None:
+    normalized_desc = _normalize_banking_description(description)
+    if not normalized_desc:
+        return
+    normalized_inst = _normalize_text(institution or "")
+    category_name = (category or BANKING_DEFAULT_CATEGORY).strip()
+    subcategory_name = (subcategory or BANKING_DEFAULT_SUBCATEGORY).strip()
+    _upsert_banking_category(portfolio_id, category_name, subcategory_name)
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO banking_category_rules (
+                portfolio_id,
+                institution,
+                match_type,
+                match_value,
+                category,
+                subcategory,
+                updated_at
+            )
+            VALUES (?, ?, 'exact', ?, ?, ?, ?)
+            ON CONFLICT(portfolio_id, institution, match_type, match_value)
+            DO UPDATE SET
+                category = excluded.category,
+                subcategory = excluded.subcategory,
+                updated_at = excluded.updated_at
+            """,
+            (
+                portfolio_id,
+                normalized_inst,
+                normalized_desc,
+                category_name,
+                subcategory_name,
+                now,
+            ),
+        )
+
+
+def _suggest_banking_category(description: str | None) -> tuple[str, str] | None:
+    normalized_desc = _normalize_banking_description(description)
+    if not normalized_desc:
+        return None
+    for category, subcategory, keywords in BANKING_CATEGORY_KEYWORDS:
+        for keyword in keywords:
+            if keyword in normalized_desc:
+                return category, subcategory
+    return None
+
+
+def _apply_banking_category_rules(
+    portfolio_id: int, institution: str, items: list[dict]
+) -> None:
+    for item in items:
+        category = item.get("category") or BANKING_DEFAULT_CATEGORY
+        subcategory = item.get("subcategory") or BANKING_DEFAULT_SUBCATEGORY
+        if _normalize_text(category) == _normalize_text(BANKING_DEFAULT_CATEGORY):
+            rule = _find_banking_rule(portfolio_id, institution, item.get("description"))
+            if rule:
+                category = rule["category"]
+                subcategory = rule.get("subcategory") or BANKING_DEFAULT_SUBCATEGORY
+                item["category"] = category
+                item["subcategory"] = subcategory
+            else:
+                suggestion = _suggest_banking_category(item.get("description"))
+                if suggestion:
+                    category, subcategory = suggestion
+                    item["category"] = category
+                    item["subcategory"] = subcategory
+                else:
+                    item["category"] = category
+                    item["subcategory"] = subcategory
+        else:
+            item["subcategory"] = subcategory
+        _upsert_banking_category(portfolio_id, category, subcategory)
+
+
+def _upsert_banking_institution(portfolio_id: int, name: str) -> None:
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO banking_institutions (portfolio_id, name, created_at)
+            VALUES (?, ?, ?)
+            """,
+            (portfolio_id, name, now),
+        )
+
+
+def _list_banking_institutions(portfolio_id: int) -> list[str]:
+    with _db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT name
+            FROM banking_institutions
+            WHERE portfolio_id = ?
+            ORDER BY name
+            """,
+            (portfolio_id,),
+        ).fetchall()
+    return [row["name"] for row in rows]
+
+
+def _load_banking_rows(
+    file_bytes: bytes | None, filename: str | None, text: str | None
+) -> list[list[str | float | int | None]]:
+    if text:
+        return _load_rows_from_text(text)
+    if not file_bytes or not filename:
+        return []
+    if file_bytes[:2] == b"PK":
+        rows = _load_rows_from_excel(file_bytes, f"{filename}.xlsx")
+    elif filename.lower().endswith((".xls", ".xlsx")):
+        rows = _load_rows_from_excel(file_bytes, filename)
+    else:
+        for encoding in ("utf-8-sig", "latin-1"):
+            try:
+                decoded = file_bytes.decode(encoding)
+                rows = _load_rows_from_text(decoded)
+                break
+            except UnicodeError:
+                rows = []
+        else:
+            rows = []
+    rows = _split_csv_column_rows(rows)
+    return rows
+
+
+def _trim_empty_rows(rows: list[list[str | float | int | None]]) -> list[list]:
+    trimmed: list[list] = []
+    for row in rows:
+        if any(str(cell).strip() if cell is not None else "" for cell in row):
+            trimmed.append(row)
+    return trimmed
+
+
+def _build_banking_preview(
+    rows: list[list[str | float | int | None]],
+    currency_fallback: str,
+) -> tuple[list[str], list[dict], dict[str, int | None], list[str]]:
+    rows = _trim_empty_rows(rows)
+    header_row = _find_header_row(rows)
+    if header_row is None:
+        return [], [], _suggest_banking_mapping([]), ["No header row detected."]
+    columns = [
+        _normalize_optional_text(_fix_mojibake(cell)) or ""
+        for cell in rows[header_row]
+    ]
+    data_rows = rows[header_row + 1 :]
+    mapping = _suggest_banking_mapping(columns)
+    items, warnings = _build_banking_items(data_rows, columns, mapping, currency_fallback)
+    preview_rows: list[dict] = []
+    for row in data_rows:
+        preview_rows.append(
+            {
+                "cells": [cell if cell is not None else "" for cell in row],
+                "include": True,
+            }
+        )
+    return columns, preview_rows, mapping, warnings
 
 
 def _map_santander_category(account: str) -> str:
@@ -3109,6 +3820,271 @@ def _list_holdings_metadata(portfolio_id: int) -> dict[str, dict]:
         }
         for row in rows
     }
+
+
+def _save_banking_import(
+    portfolio_id: int,
+    institution: str,
+    source_file: str,
+    file_hash: str,
+    row_count: int,
+) -> int:
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO banking_imports (
+                portfolio_id,
+                institution,
+                source_file,
+                file_hash,
+                imported_at,
+                row_count
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (portfolio_id, institution, source_file, file_hash, now, row_count),
+        )
+        return int(cursor.lastrowid)
+
+
+def _save_banking_transactions(
+    portfolio_id: int, import_id: int, institution: str, items: list[dict]
+) -> None:
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        conn.executemany(
+            """
+            INSERT INTO banking_transactions (
+                import_id,
+                portfolio_id,
+                institution,
+                tx_date,
+                description,
+                amount,
+                balance,
+                currency,
+                category,
+                subcategory,
+                raw_json,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    import_id,
+                    portfolio_id,
+                    institution,
+                    item["tx_date"],
+                    item["description"],
+                    float(item["amount"]),
+                    float(item["balance"]) if item.get("balance") is not None else None,
+                    item.get("currency") or "EUR",
+                    item.get("category") or BANKING_DEFAULT_CATEGORY,
+                    item.get("subcategory") or BANKING_DEFAULT_SUBCATEGORY,
+                    json.dumps(item.get("raw") or {}),
+                    now,
+                )
+                for item in items
+            ],
+        )
+
+
+def _list_banking_transactions(
+    portfolio_id: int,
+    month: str | None = None,
+    category: str | None = None,
+    subcategory: str | None = None,
+    institution: str | None = None,
+) -> list[dict]:
+    query = [
+        "SELECT id, tx_date, description, amount, balance, currency, category, subcategory, institution",
+        "FROM banking_transactions",
+        "WHERE portfolio_id = ?",
+    ]
+    params: list[object] = [portfolio_id]
+    if month:
+        query.append("AND substr(tx_date, 1, 7) = ?")
+        params.append(month)
+    if category:
+        query.append("AND lower(category) = ?")
+        params.append(_normalize_text(category))
+    if subcategory:
+        query.append("AND lower(subcategory) = ?")
+        params.append(_normalize_text(subcategory))
+    if institution:
+        query.append("AND lower(institution) = ?")
+        params.append(_normalize_text(institution))
+    query.append("ORDER BY tx_date DESC")
+    with _db_connection() as conn:
+        rows = conn.execute("\n".join(query), params).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "tx_date": row["tx_date"],
+            "description": row["description"],
+            "amount": float(row["amount"] or 0),
+            "balance": float(row["balance"]) if row["balance"] is not None else None,
+            "currency": row["currency"],
+            "category": row["category"],
+            "subcategory": row["subcategory"],
+            "institution": row["institution"],
+        }
+        for row in rows
+    ]
+
+
+def _update_banking_transaction_category(
+    portfolio_id: int,
+    tx_id: int,
+    category: str,
+    subcategory: str | None,
+) -> dict:
+    category_name = (category or BANKING_DEFAULT_CATEGORY).strip()
+    subcategory_name = (subcategory or BANKING_DEFAULT_SUBCATEGORY).strip()
+    with _db_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT institution, description
+            FROM banking_transactions
+            WHERE id = ? AND portfolio_id = ?
+            """,
+            (tx_id, portfolio_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Transaction not found.")
+        conn.execute(
+            """
+            UPDATE banking_transactions
+            SET category = ?, subcategory = ?
+            WHERE id = ? AND portfolio_id = ?
+            """,
+            (category_name, subcategory_name, tx_id, portfolio_id),
+        )
+    _learn_banking_rule(
+        portfolio_id,
+        row["institution"],
+        row["description"],
+        category_name,
+        subcategory_name,
+    )
+    return {
+        "id": tx_id,
+        "category": category_name,
+        "subcategory": subcategory_name,
+    }
+
+
+def _clear_banking_transactions(portfolio_id: int) -> dict[str, int]:
+    with _db_connection() as conn:
+        tx_deleted = conn.execute(
+            "DELETE FROM banking_transactions WHERE portfolio_id = ?",
+            (portfolio_id,),
+        ).rowcount
+        import_deleted = conn.execute(
+            "DELETE FROM banking_imports WHERE portfolio_id = ?",
+            (portfolio_id,),
+        ).rowcount
+        institutions_deleted = conn.execute(
+            "DELETE FROM banking_institutions WHERE portfolio_id = ?",
+            (portfolio_id,),
+        ).rowcount
+    return {
+        "transactions": tx_deleted or 0,
+        "imports": import_deleted or 0,
+        "institutions": institutions_deleted or 0,
+    }
+
+
+def _upsert_banking_budget(
+    portfolio_id: int, category: str, month: str, amount: float
+) -> dict:
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO banking_budgets (
+                portfolio_id,
+                category,
+                month,
+                amount,
+                created_at,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(portfolio_id, category, month)
+            DO UPDATE SET
+                amount = excluded.amount,
+                updated_at = excluded.updated_at
+            """,
+            (portfolio_id, category, month, amount, now, now),
+        )
+        row = conn.execute(
+            """
+            SELECT id, category, month, amount, created_at, updated_at
+            FROM banking_budgets
+            WHERE portfolio_id = ? AND category = ? AND month = ?
+            """,
+            (portfolio_id, category, month),
+        ).fetchone()
+    return dict(row) if row else {}
+
+
+def _delete_banking_budget(portfolio_id: int, budget_id: int) -> bool:
+    with _db_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT id
+            FROM banking_budgets
+            WHERE id = ? AND portfolio_id = ?
+            """,
+            (budget_id, portfolio_id),
+        ).fetchone()
+        if not row:
+            return False
+        conn.execute("DELETE FROM banking_budgets WHERE id = ?", (budget_id,))
+    return True
+
+
+def _list_banking_budgets(portfolio_id: int, month: str) -> list[dict]:
+    with _db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, category, month, amount
+            FROM banking_budgets
+            WHERE portfolio_id = ? AND month = ?
+            ORDER BY category
+            """,
+            (portfolio_id, month),
+        ).fetchall()
+        results: list[dict] = []
+        for row in rows:
+            spent_row = conn.execute(
+                """
+                SELECT SUM(ABS(amount)) AS spent
+                FROM banking_transactions
+                WHERE portfolio_id = ?
+                  AND lower(category) = ?
+                  AND amount < 0
+                  AND substr(tx_date, 1, 7) = ?
+                """,
+                (portfolio_id, _normalize_text(row["category"]), month),
+            ).fetchone()
+            spent = float(spent_row["spent"] or 0)
+            amount = float(row["amount"] or 0)
+            remaining = amount - spent
+            percent = round(spent / amount * 100, 2) if amount else 0.0
+            results.append(
+                {
+                    "id": row["id"],
+                    "category": row["category"],
+                    "month": row["month"],
+                    "amount": amount,
+                    "spent": spent,
+                    "remaining": remaining,
+                    "percent": percent,
+                }
+            )
+    return results
 
 
 def _upsert_holdings_metadata(
@@ -5506,6 +6482,187 @@ def refresh_holding_prices_overall(
         except HTTPException as exc:
             results.append({"ticker": ticker, "status": "error", "error": exc.detail})
     return {"items": results}
+
+
+@app.get("/portfolios/{portfolio_id}/banking/categories")
+def list_banking_categories(
+    portfolio_id: int, authorization: str | None = Header(default=None)
+) -> dict:
+    session = _require_session(authorization)
+    if not _get_portfolio(portfolio_id, session["email"]):
+        raise HTTPException(status_code=404, detail="Portfolio not found.")
+    _ensure_banking_categories(portfolio_id)
+    return {"items": _list_banking_categories(portfolio_id)}
+
+
+@app.get("/portfolios/{portfolio_id}/banking/institutions")
+def list_banking_institutions(
+    portfolio_id: int, authorization: str | None = Header(default=None)
+) -> dict:
+    session = _require_session(authorization)
+    if not _get_portfolio(portfolio_id, session["email"]):
+        raise HTTPException(status_code=404, detail="Portfolio not found.")
+    return {"items": _list_banking_institutions(portfolio_id)}
+
+
+@app.post("/portfolios/{portfolio_id}/banking/preview")
+def banking_preview(
+    portfolio_id: int,
+    authorization: str | None = Header(default=None),
+    institution: str | None = Form(default=None),
+    text: str | None = Form(default=None),
+    file: UploadFile | None = File(default=None),
+) -> dict:
+    session = _require_session(authorization)
+    portfolio = _get_portfolio(portfolio_id, session["email"])
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found.")
+    if not file and not text:
+        raise HTTPException(status_code=400, detail="Provide a file or pasted data.")
+    _ensure_banking_categories(portfolio_id)
+    file_bytes = file.file.read() if file else None
+    filename = file.filename if file else "pasted.csv"
+    content_hash = hashlib.sha256(file_bytes or text.encode("utf-8")).hexdigest()
+    rows = _load_banking_rows(file_bytes, filename, text)
+    if not rows:
+        raise HTTPException(status_code=400, detail="No rows found in the file.")
+    columns, preview_rows, mapping, warnings = _build_banking_preview(
+        rows, portfolio["currency"]
+    )
+    return {
+        "source_file": filename,
+        "file_hash": content_hash,
+        "institution": institution,
+        "columns": columns,
+        "rows": preview_rows,
+        "mapping": mapping,
+        "warnings": warnings,
+    }
+
+
+@app.post("/portfolios/{portfolio_id}/banking/commit")
+def banking_commit(
+    portfolio_id: int,
+    payload: BankingCommitRequest,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    session = _require_session(authorization)
+    portfolio = _get_portfolio(portfolio_id, session["email"])
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found.")
+    institution = payload.institution.strip() if payload.institution else ""
+    if not institution:
+        raise HTTPException(status_code=400, detail="Institution is required.")
+    _ensure_banking_categories(portfolio_id)
+    rows = [row.cells for row in payload.rows if row.include]
+    items, warnings = _build_banking_items(
+        rows, payload.columns, payload.mapping, portfolio["currency"]
+    )
+    if not items:
+        raise HTTPException(status_code=400, detail="No valid rows to import.")
+    _apply_banking_category_rules(portfolio_id, institution, items)
+    try:
+        import_id = _save_banking_import(
+            portfolio_id, institution, payload.source_file, payload.file_hash, len(items)
+        )
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="File already imported.") from exc
+    _save_banking_transactions(portfolio_id, import_id, institution, items)
+    _upsert_banking_institution(portfolio_id, institution)
+    return {"status": "imported", "import_id": import_id, "warnings": warnings}
+
+
+@app.get("/portfolios/{portfolio_id}/banking/transactions")
+def list_banking_transactions(
+    portfolio_id: int,
+    authorization: str | None = Header(default=None),
+    month: str | None = None,
+    category: str | None = None,
+    subcategory: str | None = None,
+    institution: str | None = None,
+) -> dict:
+    session = _require_session(authorization)
+    if not _get_portfolio(portfolio_id, session["email"]):
+        raise HTTPException(status_code=404, detail="Portfolio not found.")
+    items = _list_banking_transactions(
+        portfolio_id, month=month, category=category, subcategory=subcategory, institution=institution
+    )
+    return {"items": items}
+
+
+@app.post("/portfolios/{portfolio_id}/banking/transactions/{tx_id}/category")
+def update_banking_transaction_category(
+    portfolio_id: int,
+    tx_id: int,
+    payload: BankingCategoryUpdateRequest,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    session = _require_session(authorization)
+    if not _get_portfolio(portfolio_id, session["email"]):
+        raise HTTPException(status_code=404, detail="Portfolio not found.")
+    _ensure_banking_categories(portfolio_id)
+    result = _update_banking_transaction_category(
+        portfolio_id, tx_id, payload.category, payload.subcategory
+    )
+    return {"status": "updated", "transaction": result}
+
+
+@app.post("/portfolios/{portfolio_id}/banking/clear")
+def clear_banking_transactions(
+    portfolio_id: int, authorization: str | None = Header(default=None)
+) -> dict:
+    session = _require_session(authorization)
+    if not _get_portfolio(portfolio_id, session["email"]):
+        raise HTTPException(status_code=404, detail="Portfolio not found.")
+    result = _clear_banking_transactions(portfolio_id)
+    return {"status": "cleared", "counts": result}
+
+
+@app.get("/portfolios/{portfolio_id}/banking/budgets")
+def list_banking_budgets(
+    portfolio_id: int,
+    month: str | None = None,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    session = _require_session(authorization)
+    if not _get_portfolio(portfolio_id, session["email"]):
+        raise HTTPException(status_code=404, detail="Portfolio not found.")
+    month_value = month or datetime.utcnow().strftime("%Y-%m")
+    return {"items": _list_banking_budgets(portfolio_id, month_value)}
+
+
+@app.post("/portfolios/{portfolio_id}/banking/budgets")
+def upsert_banking_budget(
+    portfolio_id: int,
+    payload: BankingBudgetRequest,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    session = _require_session(authorization)
+    if not _get_portfolio(portfolio_id, session["email"]):
+        raise HTTPException(status_code=404, detail="Portfolio not found.")
+    category = (payload.category or "").strip()
+    if not category:
+        raise HTTPException(status_code=400, detail="Category is required.")
+    if payload.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than 0.")
+    month_value = payload.month or datetime.utcnow().strftime("%Y-%m")
+    _upsert_banking_category(portfolio_id, category, None)
+    budget = _upsert_banking_budget(portfolio_id, category, month_value, payload.amount)
+    return {"status": "saved", "budget": budget}
+
+
+@app.delete("/portfolios/{portfolio_id}/banking/budgets/{budget_id}")
+def delete_banking_budget(
+    portfolio_id: int,
+    budget_id: int,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    session = _require_session(authorization)
+    if not _get_portfolio(portfolio_id, session["email"]):
+        raise HTTPException(status_code=404, detail="Portfolio not found.")
+    if not _delete_banking_budget(portfolio_id, budget_id):
+        raise HTTPException(status_code=404, detail="Budget not found.")
+    return {"status": "deleted"}
 
 
 @app.get("/portfolios/{portfolio_id}/institutions/{institution}/detail")

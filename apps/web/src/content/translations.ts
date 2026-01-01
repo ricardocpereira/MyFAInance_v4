@@ -151,6 +151,74 @@ export const translations = {
         price: "Price must be greater than 0."
       }
     },
+    bankings: {
+      title: "Banking Transactions",
+      subtitle: "Import and classify banking movements.",
+      clear: "Clear transactions",
+      clearing: "Clearing...",
+      clearConfirm: "Clear all imported banking transactions? This cannot be undone.",
+      clearSuccess: "Banking transactions cleared.",
+      clearError: "Unable to clear banking transactions.",
+      institution: "Institution",
+      selectInstitution: "Select...",
+      customInstitution: "Other...",
+      customInstitutionLabel: "Custom institution",
+      fileLabel: "Choose file",
+      pasteLabel: "Paste data",
+      preview: "Preview",
+      previewing: "Previewing...",
+      commit: "Import",
+      importing: "Importing...",
+      previewTitle: "Preview",
+      loading: "Loading...",
+      empty: "No transactions yet.",
+      loadError: "Unable to load transactions.",
+      noFile: "Select a file or paste data first.",
+      institutionRequired: "Institution is required.",
+      importSuccess: "Transactions imported.",
+      noSubcategory: "No subcategory",
+      summary: {
+        income: "Income",
+        expenses: "Expenses",
+        net: "Net",
+        topCategory: "Top category"
+      },
+      charts: {
+        spendByCategory: "Spending by category",
+        spendSubtitle: "Based on expenses only",
+        monthlyNet: "Monthly net",
+        monthlySubtitle: "Income minus expenses",
+        empty: "No chart data yet."
+      },
+      budgets: {
+        title: "Budgets",
+        subtitle: "Set monthly limits per category.",
+        month: "Month",
+        category: "Category",
+        categoryPlaceholder: "Select...",
+        amount: "Amount",
+        save: "Save budget",
+        delete: "Delete",
+        spent: "Spent",
+        remaining: "Remaining",
+        empty: "No budgets yet."
+      },
+      filters: {
+        month: "Month",
+        category: "Category",
+        subcategory: "Subcategory",
+        institution: "Institution",
+        all: "All"
+      },
+      columns: {
+        date: "Date",
+        description: "Description",
+        amount: "Amount",
+        balance: "Balance",
+        category: "Category",
+        institution: "Institution"
+      }
+    },
     imports: {
       title: "Import Snapshots",
       subtitle: "Upload institution files and map balances to categories.",
@@ -686,6 +754,75 @@ export const translations = {
         price: "Preco deve ser maior que 0."
       }
     },
+    bankings: {
+      title: "Transacoes Bancarias",
+      subtitle: "Importe e classifique movimentos bancarios.",
+      clear: "Limpar transacoes",
+      clearing: "A limpar...",
+      clearConfirm:
+        "Limpar todas as transacoes bancarias importadas? Esta acao nao pode ser anulada.",
+      clearSuccess: "Transacoes bancarias removidas.",
+      clearError: "Nao foi possivel limpar as transacoes bancarias.",
+      institution: "Instituicao",
+      selectInstitution: "Selecionar...",
+      customInstitution: "Outra...",
+      customInstitutionLabel: "Instituicao personalizada",
+      fileLabel: "Escolher ficheiro",
+      pasteLabel: "Colar dados",
+      preview: "Pre-visualizar",
+      previewing: "A pre-visualizar...",
+      commit: "Importar",
+      importing: "A importar...",
+      previewTitle: "Pre-visualizacao",
+      loading: "A carregar...",
+      empty: "Sem transacoes.",
+      loadError: "Nao foi possivel carregar transacoes.",
+      noFile: "Escolha um ficheiro ou cole dados primeiro.",
+      institutionRequired: "A instituicao e obrigatoria.",
+      importSuccess: "Transacoes importadas.",
+      noSubcategory: "Sem subcategoria",
+      summary: {
+        income: "Receitas",
+        expenses: "Despesas",
+        net: "Saldo",
+        topCategory: "Categoria principal"
+      },
+      charts: {
+        spendByCategory: "Despesas por categoria",
+        spendSubtitle: "Baseado apenas em despesas",
+        monthlyNet: "Saldo mensal",
+        monthlySubtitle: "Receitas menos despesas",
+        empty: "Sem dados para mostrar."
+      },
+      budgets: {
+        title: "Orcamentos",
+        subtitle: "Defina limites mensais por categoria.",
+        month: "Mes",
+        category: "Categoria",
+        categoryPlaceholder: "Selecionar...",
+        amount: "Montante",
+        save: "Guardar orcamento",
+        delete: "Eliminar",
+        spent: "Gasto",
+        remaining: "Restante",
+        empty: "Sem orcamentos."
+      },
+      filters: {
+        month: "Mes",
+        category: "Categoria",
+        subcategory: "Subcategoria",
+        institution: "Instituicao",
+        all: "Todos"
+      },
+      columns: {
+        date: "Data",
+        description: "Descricao",
+        amount: "Montante",
+        balance: "Saldo",
+        category: "Categoria",
+        institution: "Instituicao"
+      }
+    },
     imports: {
       title: "Importar Snapshots",
       subtitle: "Carregue ficheiros e mapeie saldos para categorias.",
@@ -1218,6 +1355,75 @@ export const translations = {
         date: "Fecha obligatoria.",
         shares: "Shares debe ser mayor que 0.",
         price: "Precio debe ser mayor que 0."
+      }
+    },
+    bankings: {
+      title: "Transacciones Bancarias",
+      subtitle: "Importa y clasifica movimientos bancarios.",
+      clear: "Borrar transacciones",
+      clearing: "Borrando...",
+      clearConfirm:
+        "Borrar todas las transacciones bancarias importadas? Esta accion no se puede deshacer.",
+      clearSuccess: "Transacciones bancarias eliminadas.",
+      clearError: "No se pudieron borrar las transacciones bancarias.",
+      institution: "Institucion",
+      selectInstitution: "Seleccionar...",
+      customInstitution: "Otra...",
+      customInstitutionLabel: "Institucion personalizada",
+      fileLabel: "Elegir archivo",
+      pasteLabel: "Pegar datos",
+      preview: "Vista previa",
+      previewing: "Previsualizando...",
+      commit: "Importar",
+      importing: "Importando...",
+      previewTitle: "Vista previa",
+      loading: "Cargando...",
+      empty: "Sin transacciones.",
+      loadError: "No se pudieron cargar transacciones.",
+      noFile: "Selecciona un archivo o pega datos primero.",
+      institutionRequired: "La institucion es obligatoria.",
+      importSuccess: "Transacciones importadas.",
+      noSubcategory: "Sin subcategoria",
+      summary: {
+        income: "Ingresos",
+        expenses: "Gastos",
+        net: "Saldo",
+        topCategory: "Categoria principal"
+      },
+      charts: {
+        spendByCategory: "Gastos por categoria",
+        spendSubtitle: "Solo gastos",
+        monthlyNet: "Saldo mensual",
+        monthlySubtitle: "Ingresos menos gastos",
+        empty: "Sin datos para mostrar."
+      },
+      budgets: {
+        title: "Presupuestos",
+        subtitle: "Define limites mensuales por categoria.",
+        month: "Mes",
+        category: "Categoria",
+        categoryPlaceholder: "Seleccionar...",
+        amount: "Importe",
+        save: "Guardar presupuesto",
+        delete: "Eliminar",
+        spent: "Gastado",
+        remaining: "Restante",
+        empty: "Sin presupuestos."
+      },
+      filters: {
+        month: "Mes",
+        category: "Categoria",
+        subcategory: "Subcategoria",
+        institution: "Institucion",
+        all: "Todos"
+      },
+      columns: {
+        date: "Fecha",
+        description: "Descripcion",
+        amount: "Monto",
+        balance: "Saldo",
+        category: "Categoria",
+        institution: "Institucion"
       }
     },
     imports: {

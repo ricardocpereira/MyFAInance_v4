@@ -16,6 +16,9 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
 import Svg, { G, Path, Circle } from "react-native-svg";
 
+const BANKING_DEFAULT_CATEGORY = "Sem categoria";
+const BANKING_DEFAULT_SUBCATEGORY = "Sem subcategoria";
+
 export default function App() {
   const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
@@ -149,6 +152,35 @@ export default function App() {
   const [holdingSaving, setHoldingSaving] = useState(false);
   const [holdingError, setHoldingError] = useState("");
   const [holdingMessage, setHoldingMessage] = useState("");
+  const [bankingInstitutions, setBankingInstitutions] = useState([]);
+  const [bankingCategories, setBankingCategories] = useState([]);
+  const [bankingTransactions, setBankingTransactions] = useState([]);
+  const [bankingLoading, setBankingLoading] = useState(false);
+  const [bankingError, setBankingError] = useState("");
+  const [bankingMessage, setBankingMessage] = useState("");
+  const [bankingFile, setBankingFile] = useState(null);
+  const [bankingPaste, setBankingPaste] = useState("");
+  const [bankingPreview, setBankingPreview] = useState(null);
+  const [bankingMapping, setBankingMapping] = useState([]);
+  const [bankingInstitutionInput, setBankingInstitutionInput] = useState("");
+  const [bankingInstitutionSelect, setBankingInstitutionSelect] = useState("");
+  const [bankingPreviewing, setBankingPreviewing] = useState(false);
+  const [bankingImporting, setBankingImporting] = useState(false);
+  const [bankingShowMapping, setBankingShowMapping] = useState(false);
+  const [bankingShowWarnings, setBankingShowWarnings] = useState(false);
+  const [bankingMonth, setBankingMonth] = useState("");
+  const [bankingCategory, setBankingCategory] = useState("");
+  const [bankingSubcategory, setBankingSubcategory] = useState("");
+  const [bankingInstitutionFilter, setBankingInstitutionFilter] = useState("");
+  const [bankingUpdatingId, setBankingUpdatingId] = useState(null);
+  const [bankingBudgets, setBankingBudgets] = useState([]);
+  const [bankingBudgetsLoading, setBankingBudgetsLoading] = useState(false);
+  const [bankingBudgetsError, setBankingBudgetsError] = useState("");
+  const [bankingBudgetMonth, setBankingBudgetMonth] = useState(
+    new Date().toISOString().slice(0, 7)
+  );
+  const [bankingBudgetCategory, setBankingBudgetCategory] = useState("");
+  const [bankingBudgetAmount, setBankingBudgetAmount] = useState("");
   const API_BASE = process.env.EXPO_PUBLIC_API_BASE || "http://10.0.2.2:8000";
   const institutionLogos = useMemo(
     () => ({
@@ -174,6 +206,66 @@ export default function App() {
       null,
     [portfolios, selectedPortfolioId]
   );
+
+  const bankingSummary = useMemo(() => {
+    let income = 0;
+    let expenses = 0;
+    const byCategory = {};
+    bankingTransactions.forEach((tx) => {
+      if (tx.amount >= 0) {
+        income += tx.amount;
+      } else {
+        const spend = Math.abs(tx.amount);
+        expenses += spend;
+        const key = tx.category || BANKING_DEFAULT_CATEGORY;
+        byCategory[key] = (byCategory[key] || 0) + spend;
+      }
+    });
+    const net = income - expenses;
+    const topCategory = Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0];
+    return {
+      income,
+      expenses,
+      net,
+      topCategory: topCategory ? topCategory[0] : "--"
+    };
+  }, [bankingTransactions]);
+
+  const bankingExpenseByCategory = useMemo(() => {
+    const totals = {};
+    bankingTransactions.forEach((tx) => {
+      if (tx.amount < 0) {
+        const key = tx.category || BANKING_DEFAULT_CATEGORY;
+        totals[key] = (totals[key] || 0) + Math.abs(tx.amount);
+      }
+    });
+    return Object.entries(totals)
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [bankingTransactions]);
+
+  const bankingMonthlyNet = useMemo(() => {
+    const totals = {};
+    bankingTransactions.forEach((tx) => {
+      const month = tx.tx_date ? String(tx.tx_date).slice(0, 7) : "Unknown";
+      if (!totals[month]) {
+        totals[month] = { income: 0, expenses: 0 };
+      }
+      if (tx.amount >= 0) {
+        totals[month].income += tx.amount;
+      } else {
+        totals[month].expenses += Math.abs(tx.amount);
+      }
+    });
+    return Object.entries(totals)
+      .map(([month, entry]) => ({
+        month,
+        net: entry.income - entry.expenses
+      }))
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .slice(-6);
+  }, [bankingTransactions]);
 
   useEffect(() => {
     setLocalCategories(activePortfolio?.categories || []);
@@ -242,6 +334,23 @@ export default function App() {
     }
     const assets = result.assets || (result.uri ? [result] : []);
     return assets.map((asset) => toFormFile(asset, "upload.xlsx"));
+  };
+
+  const pickBankingFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: [
+        "text/csv",
+        "text/plain",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      ],
+      copyToCacheDirectory: true
+    });
+    if (result.canceled) {
+      return null;
+    }
+    const asset = result.assets ? result.assets[0] : result;
+    return toFormFile(asset, "transactions.csv");
   };
 
   const pickPdf = async ({ multiple } = {}) => {
@@ -395,6 +504,95 @@ export default function App() {
       setInstitutionsError("Unable to load institutions.");
     } finally {
       setInstitutionsLoading(false);
+    }
+  };
+
+  const loadBankingCategories = async (portfolioId) => {
+    if (!token || !portfolioId) {
+      return;
+    }
+    try {
+      const data = await authJson(`/portfolios/${portfolioId}/banking/categories`);
+      setBankingCategories(data.items || []);
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  const loadBankingInstitutions = async (portfolioId) => {
+    if (!token || !portfolioId) {
+      return;
+    }
+    try {
+      const data = await authJson(`/portfolios/${portfolioId}/institutions`);
+      const names = (data.items || [])
+        .map((item) => item?.institution || item?.name)
+        .filter(Boolean);
+      setBankingInstitutions(Array.from(new Set(names)));
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    if (!bankingInstitutionInput) {
+      return;
+    }
+    if (bankingInstitutions.includes(bankingInstitutionInput)) {
+      setBankingInstitutionSelect(bankingInstitutionInput);
+    }
+  }, [bankingInstitutions, bankingInstitutionInput]);
+
+  const loadBankingTransactions = async (portfolioId) => {
+    if (!token || !portfolioId) {
+      return;
+    }
+    setBankingLoading(true);
+    setBankingError("");
+    try {
+      const params = [];
+      if (bankingMonth) {
+        params.push(`month=${encodeURIComponent(bankingMonth)}`);
+      }
+      if (bankingCategory) {
+        params.push(`category=${encodeURIComponent(bankingCategory)}`);
+      }
+      if (bankingSubcategory) {
+        params.push(`subcategory=${encodeURIComponent(bankingSubcategory)}`);
+      }
+      if (bankingInstitutionFilter) {
+        params.push(`institution=${encodeURIComponent(bankingInstitutionFilter)}`);
+      }
+      const query = params.length ? `?${params.join("&")}` : "";
+      const data = await authJson(
+        `/portfolios/${portfolioId}/banking/transactions${query}`
+      );
+      setBankingTransactions(data.items || []);
+    } catch (err) {
+      setBankingError("Unable to load transactions.");
+    } finally {
+      setBankingLoading(false);
+    }
+  };
+
+  const loadBankingBudgets = async (portfolioId) => {
+    if (!token || !portfolioId) {
+      return;
+    }
+    setBankingBudgetsLoading(true);
+    setBankingBudgetsError("");
+    try {
+      const month = bankingBudgetMonth || new Date().toISOString().slice(0, 7);
+      const data = await authJson(
+        `/portfolios/${portfolioId}/banking/budgets?month=${encodeURIComponent(
+          month
+        )}`
+      );
+      setBankingBudgets(data.items || []);
+    } catch (err) {
+      setBankingBudgetsError("Unable to load budgets.");
+    } finally {
+      setBankingBudgetsLoading(false);
     }
   };
 
@@ -1493,6 +1691,332 @@ export default function App() {
     }
   };
 
+  const bankingMappingOptions = [
+    { value: "ignore", label: "Ignore" },
+    { value: "date", label: "Date" },
+    { value: "description", label: "Description" },
+    { value: "amount", label: "Amount" },
+    { value: "debit", label: "Debit" },
+    { value: "credit", label: "Credit" },
+    { value: "balance", label: "Balance" },
+    { value: "currency", label: "Currency" }
+  ];
+
+  const deriveBankingMapping = (mapping, columns) => {
+    const result = new Array(columns.length).fill("ignore");
+    Object.entries(mapping || {}).forEach(([key, value]) => {
+      if (typeof value === "number" && value >= 0 && value < columns.length) {
+        result[value] = key;
+      }
+    });
+    return result;
+  };
+
+  const resolveBankingInstitution = () => {
+    if (
+      bankingInstitutionSelect &&
+      bankingInstitutionSelect !== "Custom" &&
+      bankingInstitutionSelect !== "Select"
+    ) {
+      return bankingInstitutionSelect;
+    }
+    return bankingInstitutionInput;
+  };
+
+  const handleBankingPreview = async () => {
+    if (!activePortfolio) {
+      return;
+    }
+    if (!bankingFile && !bankingPaste.trim()) {
+      setBankingError("Select a file or paste data first.");
+      return;
+    }
+    setBankingPreviewing(true);
+    setBankingError("");
+    setBankingMessage("");
+    try {
+      const formData = new FormData();
+      if (bankingFile) {
+        formData.append("file", bankingFile);
+      }
+      if (bankingPaste.trim()) {
+        formData.append("text", bankingPaste.trim());
+      }
+      const institutionName = resolveBankingInstitution();
+      if (institutionName.trim()) {
+        formData.append("institution", institutionName.trim());
+      }
+      const response = await fetch(
+        `${API_BASE}/portfolios/${activePortfolio.id}/banking/preview`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          body: formData
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.detail || "Preview failed.");
+      }
+      setBankingPreview(data);
+      setBankingMapping(deriveBankingMapping(data.mapping, data.columns || []));
+    } catch (err) {
+      setBankingError(err.message || "Preview failed.");
+    } finally {
+      setBankingPreviewing(false);
+    }
+  };
+
+  const handleBankingMappingChange = (index, value) => {
+    setBankingMapping((current) => {
+      const next = [...current];
+      if (value !== "ignore") {
+        next.forEach((item, idx) => {
+          if (idx !== index && item === value) {
+            next[idx] = "ignore";
+          }
+        });
+      }
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const handleBankingRowToggle = (index) => {
+    if (!bankingPreview) {
+      return;
+    }
+    const nextRows = bankingPreview.rows.map((row, idx) =>
+      idx === index ? { ...row, include: !row.include } : row
+    );
+    setBankingPreview({ ...bankingPreview, rows: nextRows });
+  };
+
+  const buildBankingMappingPayload = () => {
+    const mapping = {
+      date: null,
+      description: null,
+      amount: null,
+      balance: null,
+      currency: null,
+      debit: null,
+      credit: null
+    };
+    bankingMapping.forEach((value, index) => {
+      if (value && value !== "ignore") {
+        mapping[value] = index;
+      }
+    });
+    return mapping;
+  };
+
+  const handleBankingCommit = async () => {
+    if (!activePortfolio || !bankingPreview) {
+      setBankingError("Preview the file first.");
+      return;
+    }
+    const institutionName = resolveBankingInstitution();
+    if (!institutionName.trim()) {
+      setBankingError("Institution is required.");
+      return;
+    }
+    if (
+      bankingPreview.warnings?.length &&
+      bankingPreview.rows?.length &&
+      bankingPreview.warnings.length >= bankingPreview.rows.length
+    ) {
+      setBankingError("No valid rows found. Check the column detection.");
+      return;
+    }
+    setBankingImporting(true);
+    setBankingError("");
+    setBankingMessage("");
+    try {
+      await authJson(`/portfolios/${activePortfolio.id}/banking/commit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          source_file: bankingPreview.source_file,
+          file_hash: bankingPreview.file_hash,
+          institution: institutionName.trim(),
+          columns: bankingPreview.columns || [],
+          mapping: buildBankingMappingPayload(),
+          rows: bankingPreview.rows || []
+        })
+      });
+      setBankingMessage("Transactions imported.");
+      setBankingPreview(null);
+      setBankingFile(null);
+      setBankingPaste("");
+      setBankingShowMapping(false);
+      setBankingShowWarnings(false);
+      await loadBankingInstitutions(activePortfolio.id);
+      await loadBankingTransactions(activePortfolio.id);
+      await loadBankingBudgets(activePortfolio.id);
+    } catch (err) {
+      const detail = err.message || "Import failed.";
+      if (String(detail).toLowerCase().includes("no valid rows")) {
+        setBankingError("No valid rows found. Check the column detection.");
+      } else {
+        setBankingError(detail);
+      }
+    } finally {
+      setBankingImporting(false);
+    }
+  };
+
+  const handleBankingClear = async () => {
+    if (!activePortfolio) {
+      return;
+    }
+    Alert.alert(
+      "Clear transactions",
+      "This will remove all imported banking transactions.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: async () => {
+            setBankingImporting(true);
+            setBankingError("");
+            setBankingMessage("");
+            try {
+              await authJson(`/portfolios/${activePortfolio.id}/banking/clear`, {
+                method: "POST"
+              });
+              setBankingMessage("Banking transactions cleared.");
+              setBankingPreview(null);
+              setBankingFile(null);
+              setBankingPaste("");
+              setBankingShowMapping(false);
+              setBankingShowWarnings(false);
+              await loadBankingInstitutions(activePortfolio.id);
+              await loadBankingTransactions(activePortfolio.id);
+              await loadBankingBudgets(activePortfolio.id);
+            } catch (err) {
+              setBankingError("Unable to clear banking transactions.");
+            } finally {
+              setBankingImporting(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleBankingCategoryUpdate = async (txId, category, subcategory) => {
+    if (!activePortfolio) {
+      return;
+    }
+    setBankingUpdatingId(txId);
+    setBankingError("");
+    try {
+      const data = await authJson(
+        `/portfolios/${activePortfolio.id}/banking/transactions/${txId}/category`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            category,
+            subcategory: subcategory || null
+          })
+        }
+      );
+      const updated = data.transaction;
+      setBankingTransactions((current) =>
+        current.map((item) =>
+          item.id === txId
+            ? {
+                ...item,
+                category: updated.category,
+                subcategory: updated.subcategory
+              }
+            : item
+        )
+      );
+      await loadBankingCategories(activePortfolio.id);
+      await loadBankingBudgets(activePortfolio.id);
+    } catch (err) {
+      setBankingError("Unable to update category.");
+    } finally {
+      setBankingUpdatingId(null);
+    }
+  };
+
+  const handleBankingBudgetSave = async () => {
+    if (!activePortfolio) {
+      return;
+    }
+    const category = bankingBudgetCategory.trim();
+    if (!category || category === "Select") {
+      setBankingBudgetsError("Category is required.");
+      return;
+    }
+    const amountValue = parseInputNumber(bankingBudgetAmount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      setBankingBudgetsError("Amount must be greater than 0.");
+      return;
+    }
+    const month = bankingBudgetMonth || new Date().toISOString().slice(0, 7);
+    setBankingBudgetsLoading(true);
+    setBankingBudgetsError("");
+    try {
+      await authJson(`/portfolios/${activePortfolio.id}/banking/budgets`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          category,
+          amount: amountValue,
+          month
+        })
+      });
+      setBankingBudgetAmount("");
+      await loadBankingBudgets(activePortfolio.id);
+      await loadBankingCategories(activePortfolio.id);
+    } catch (err) {
+      setBankingBudgetsError("Unable to save budget.");
+    } finally {
+      setBankingBudgetsLoading(false);
+    }
+  };
+
+  const handleBankingBudgetDelete = async (budgetId) => {
+    if (!activePortfolio) {
+      return;
+    }
+    Alert.alert("Delete budget", "Remove this budget?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          setBankingBudgetsLoading(true);
+          setBankingBudgetsError("");
+          try {
+            await authJson(
+              `/portfolios/${activePortfolio.id}/banking/budgets/${budgetId}`,
+              { method: "DELETE" }
+            );
+            await loadBankingBudgets(activePortfolio.id);
+          } catch (err) {
+            setBankingBudgetsError("Unable to delete budget.");
+          } finally {
+            setBankingBudgetsLoading(false);
+          }
+        }
+      }
+    ]);
+  };
+
   const handleTradeDelete = async (entryId) => {
     if (!activePortfolio) {
       return;
@@ -1637,6 +2161,37 @@ export default function App() {
     holdingsInstitution,
     token
   ]);
+
+  useEffect(() => {
+    if (mode !== "home" || homeTab !== "banking" || !activePortfolio) {
+      return;
+    }
+    loadBankingCategories(activePortfolio.id);
+    loadBankingInstitutions(activePortfolio.id);
+  }, [mode, homeTab, activePortfolio?.id, token]);
+
+  useEffect(() => {
+    if (mode !== "home" || homeTab !== "banking" || !activePortfolio) {
+      return;
+    }
+    loadBankingTransactions(activePortfolio.id);
+  }, [
+    mode,
+    homeTab,
+    activePortfolio?.id,
+    bankingMonth,
+    bankingCategory,
+    bankingSubcategory,
+    bankingInstitutionFilter,
+    token
+  ]);
+
+  useEffect(() => {
+    if (mode !== "home" || homeTab !== "banking" || !activePortfolio) {
+      return;
+    }
+    loadBankingBudgets(activePortfolio.id);
+  }, [mode, homeTab, activePortfolio?.id, bankingBudgetMonth, token]);
 
   const categoryOptions = useMemo(
     () => [...localCategories, "Unknown"],
@@ -2635,7 +3190,7 @@ export default function App() {
                     {item.institution ? (
                       <Text style={styles.metaText}>
                         {item.institution}
-                        {item.category ? ` · ${item.category}` : ""}
+                        {item.category ? ` - ${item.category}` : ""}
                       </Text>
                     ) : item.category ? (
                       <Text style={styles.metaText}>{item.category}</Text>
@@ -2886,6 +3441,581 @@ export default function App() {
               </Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </>
+    );
+  };
+
+  const renderBanking = () => {
+    if (!activePortfolio) {
+      return <Text style={styles.subtitle}>Select a portfolio first.</Text>;
+    }
+    const categoryOptions = [
+      "All",
+      ...bankingCategories.map((item) => item.name)
+    ];
+    const subcategoryOptions = bankingCategory
+      ? bankingCategories.find((item) => item.name === bankingCategory)
+          ?.subcategories?.length
+        ? bankingCategories.find((item) => item.name === bankingCategory)
+            ?.subcategories || []
+        : [bankingCategory]
+      : [];
+    const institutionOptions = ["All", ...bankingInstitutions];
+    const mappingOptions = bankingMappingOptions.map((option) => option.value);
+    const bankingCategoryGroups = bankingCategories.map((entry) => ({
+      name: entry.name,
+      subcategories: entry.subcategories?.length
+        ? entry.subcategories
+        : [entry.name]
+    }));
+
+    return (
+      <>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Banking Transactions</Text>
+          <Text style={styles.subtitle}>
+            Import transactions and classify them.
+          </Text>
+        </View>
+
+        <View style={styles.importCard}>
+          <View style={styles.importHeader}>
+            <View>
+              <Text style={styles.importTitle}>Import transactions</Text>
+              <Text style={styles.subtitle}>
+                Upload a file or paste data.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.bankingSplit}>
+            <View style={styles.bankingSplitBlock}>
+              <Text style={styles.metaText}>Institution</Text>
+              <CategoryPicker
+                value={bankingInstitutionSelect || "Select"}
+                options={["Select", ...bankingInstitutions, "Custom"]}
+                onChange={(value) => {
+                  setBankingInstitutionSelect(value);
+                  if (value && value !== "Custom" && value !== "Select") {
+                    setBankingInstitutionInput(value);
+                  } else if (value === "Custom") {
+                    setBankingInstitutionInput("");
+                  } else {
+                    setBankingInstitutionInput("");
+                  }
+                }}
+              />
+              {bankingInstitutionSelect === "Custom" ? (
+                <TextInput
+                  style={styles.input}
+                  placeholder="Custom institution"
+                  placeholderTextColor="#6f7f96"
+                  value={bankingInstitutionInput}
+                  onChangeText={setBankingInstitutionInput}
+                />
+              ) : null}
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={async () => {
+                  const file = await pickBankingFile();
+                  if (!file) {
+                    return;
+                  }
+                  setBankingFile(file);
+                }}
+              >
+                <Text style={styles.secondaryBtnText}>Choose file</Text>
+              </TouchableOpacity>
+              {bankingFile ? (
+                <Text style={styles.metaText}>File: {bankingFile.name}</Text>
+              ) : null}
+            </View>
+            <View style={styles.bankingSplitBlock}>
+              <Text style={styles.metaText}>Paste data</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Ctrl+V..."
+                placeholderTextColor="#6f7f96"
+                value={bankingPaste}
+                onChangeText={setBankingPaste}
+                multiline
+              />
+            </View>
+          </View>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={handleBankingPreview}
+              disabled={bankingPreviewing}
+            >
+              <Text style={styles.secondaryBtnText}>
+                {bankingPreviewing ? "Previewing..." : "Preview"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={handleBankingCommit}
+              disabled={bankingImporting}
+            >
+              <Text style={styles.primaryText}>
+                {bankingImporting ? "Importing..." : "Import"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {bankingError ? <Text style={styles.error}>{bankingError}</Text> : null}
+          {bankingMessage ? (
+            <Text style={styles.message}>{bankingMessage}</Text>
+          ) : null}
+        </View>
+
+        {bankingPreview ? (
+          <View style={styles.importCard}>
+            <View style={styles.importHeader}>
+              <View>
+                <Text style={styles.importTitle}>Preview</Text>
+                <Text style={styles.subtitle}>{bankingPreview.source_file}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={() => setBankingShowMapping((value) => !value)}
+              >
+                <Text style={styles.secondaryBtnText}>
+                  {bankingShowMapping ? "Hide mapping" : "Edit mapping"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {bankingPreview.warnings?.length ? (
+              <View style={styles.noticeBox}>
+                <Text style={styles.noticeText}>
+                  {`Rows: ${bankingPreview.rows.length} - Valid: ${
+                    bankingPreview.rows.length -
+                    bankingPreview.warnings.length
+                  } - Skipped: ${bankingPreview.warnings.length}`}
+                </Text>
+                <TouchableOpacity
+                  style={styles.linkBtn}
+                  onPress={() => setBankingShowWarnings((value) => !value)}
+                >
+                  <Text style={styles.linkText}>
+                    {bankingShowWarnings ? "Hide details" : "Show details"}
+                  </Text>
+                </TouchableOpacity>
+                {bankingShowWarnings
+                  ? bankingPreview.warnings.map((warning, index) => (
+                      <Text
+                        style={styles.noticeText}
+                        key={`${warning}-${index}`}
+                      >
+                        {warning}
+                      </Text>
+                    ))
+                  : null}
+              </View>
+            ) : null}
+            {bankingShowMapping ? (
+              <>
+                <Text style={styles.metaText}>Column mapping</Text>
+                {bankingPreview.columns?.map((column, index) => (
+                  <View style={styles.previewRow} key={`${column}-${index}`}>
+                    <View style={styles.previewInfo}>
+                      <Text style={styles.previewTitle}>
+                        {column || `Column ${index + 1}`}
+                      </Text>
+                    </View>
+                    <CategoryPicker
+                      value={bankingMapping[index] || "ignore"}
+                      options={mappingOptions}
+                      onChange={(value) =>
+                        handleBankingMappingChange(index, value)
+                      }
+                    />
+                  </View>
+                ))}
+              </>
+            ) : null}
+            <Text style={styles.metaText}>Rows</Text>
+            {bankingPreview.rows?.slice(0, 20).map((row, index) => (
+              <View style={styles.previewRow} key={`row-${index}`}>
+                <View style={styles.previewInfo}>
+                  <Text style={styles.metaText} numberOfLines={1}>
+                    {row.cells
+                      .map((cell) => (cell === null ? "" : String(cell)))
+                      .join(" | ")}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.ignoreBtn,
+                    !row.include && styles.ignoreBtnActive
+                  ]}
+                  onPress={() => handleBankingRowToggle(index)}
+                >
+                  <Text style={styles.ignoreText}>
+                    {row.include ? "Include" : "Ignore"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        <View style={styles.importCard}>
+          <View style={styles.importHeader}>
+            <View>
+              <Text style={styles.importTitle}>Transactions summary</Text>
+              <Text style={styles.subtitle}>
+                Income, expenses, and top category.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.metricRow}>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Income</Text>
+              <Text style={styles.metricValue}>
+                {formatCurrency(bankingSummary.income)}
+              </Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Expenses</Text>
+              <Text style={styles.metricValue}>
+                {formatCurrency(bankingSummary.expenses)}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.metricRow}>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Net</Text>
+              <Text style={styles.metricValue}>
+                {formatCurrency(bankingSummary.net)}
+              </Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Top category</Text>
+              <Text style={styles.metricValue}>
+                {bankingSummary.topCategory}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.importCard}>
+          <View style={styles.importHeader}>
+            <View>
+              <Text style={styles.importTitle}>Transaction analytics</Text>
+              <Text style={styles.subtitle}>
+                Spending by category and monthly net.
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.metaText}>Spending by category</Text>
+          {bankingExpenseByCategory.length ? (
+            bankingExpenseByCategory.map((item) => {
+              const maxValue =
+                bankingExpenseByCategory[0]?.value || item.value || 1;
+              const width = Math.max(
+                6,
+                Math.round((item.value / maxValue) * 100)
+              );
+              return (
+                <View style={styles.barRow} key={`banking-cat-${item.label}`}>
+                  <Text style={styles.barLabel}>{item.label}</Text>
+                  <View style={styles.barTrack}>
+                    <View
+                      style={[
+                        styles.barFill,
+                        styles.barFillPos,
+                        { width: `${width}%` }
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.barValue}>
+                    {formatCurrency(item.value)}
+                  </Text>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.subtitle}>No chart data yet.</Text>
+          )}
+          <Text style={styles.metaText}>Monthly net</Text>
+          {bankingMonthlyNet.length ? (
+            bankingMonthlyNet.map((item) => {
+              const maxValue = Math.max(
+                ...bankingMonthlyNet.map((entry) => Math.abs(entry.net)),
+                1
+              );
+              const width = Math.max(
+                6,
+                Math.round((Math.abs(item.net) / maxValue) * 100)
+              );
+              return (
+                <View style={styles.barRow} key={`banking-month-${item.month}`}>
+                  <Text style={styles.barLabel}>{item.month}</Text>
+                  <View style={styles.barTrack}>
+                    <View
+                      style={[
+                        styles.barFill,
+                        item.net >= 0 ? styles.barFillPos : styles.barFillNeg,
+                        { width: `${width}%` }
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.barValue}>
+                    {formatCurrency(item.net)}
+                  </Text>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.subtitle}>No chart data yet.</Text>
+          )}
+        </View>
+
+        <View style={styles.importCard}>
+          <View style={styles.importHeader}>
+            <View>
+              <Text style={styles.importTitle}>Budgets</Text>
+              <Text style={styles.subtitle}>
+                Set monthly limits per category.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.bankingEditRow}>
+            <View style={styles.bankingEditBlock}>
+              <Text style={styles.metaText}>Month</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="YYYY-MM"
+                placeholderTextColor="#6f7f96"
+                value={bankingBudgetMonth}
+                onChangeText={setBankingBudgetMonth}
+              />
+            </View>
+            <View style={styles.bankingEditBlock}>
+              <Text style={styles.metaText}>Category</Text>
+              <CategoryPicker
+                value={bankingBudgetCategory || "Select"}
+                options={[
+                  "Select",
+                  ...bankingCategories.map((item) => item.name)
+                ]}
+                onChange={(value) =>
+                  setBankingBudgetCategory(value === "Select" ? "" : value)
+                }
+              />
+            </View>
+            <View style={styles.bankingEditBlock}>
+              <Text style={styles.metaText}>Amount</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="0.00"
+                placeholderTextColor="#6f7f96"
+                keyboardType="decimal-pad"
+                value={bankingBudgetAmount}
+                onChangeText={setBankingBudgetAmount}
+              />
+            </View>
+          </View>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={handleBankingBudgetSave}
+              disabled={bankingBudgetsLoading}
+            >
+              <Text style={styles.primaryText}>
+                {bankingBudgetsLoading ? "Saving..." : "Save budget"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {bankingBudgetsError ? (
+            <Text style={styles.error}>{bankingBudgetsError}</Text>
+          ) : null}
+          {bankingBudgetsLoading ? (
+            <Text style={styles.subtitle}>Loading...</Text>
+          ) : bankingBudgets.length ? (
+            bankingBudgets.map((budget) => {
+              const percentValue = Number.isFinite(budget.percent)
+                ? budget.percent
+                : 0;
+              const percent = Math.min(100, percentValue);
+              const fillStyle =
+                budget.percent >= 100
+                  ? styles.barFillDanger
+                  : budget.percent >= 90
+                  ? styles.barFillWarn
+                  : budget.percent >= 70
+                  ? styles.barFillCaution
+                  : styles.barFillPos;
+              return (
+                <View style={styles.budgetRow} key={`budget-${budget.id}`}>
+                  <View style={styles.previewInfo}>
+                    <Text style={styles.previewTitle}>{budget.category}</Text>
+                    <Text style={styles.metaText}>
+                      Spent: {formatCurrency(budget.spent)}
+                    </Text>
+                    <Text style={styles.metaText}>
+                      Budget: {formatCurrency(budget.amount)}
+                    </Text>
+                    <Text style={styles.metaText}>
+                      Remaining: {formatCurrency(budget.remaining)}
+                    </Text>
+                  </View>
+                  <View style={styles.budgetProgress}>
+                    <View style={styles.barTrack}>
+                      <View
+                        style={[styles.barFill, fillStyle, { width: `${percent}%` }]}
+                      />
+                    </View>
+                    <Text style={styles.metaText}>
+                      {percentValue.toFixed(2)}%
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.dangerBtn}
+                    onPress={() => handleBankingBudgetDelete(budget.id)}
+                  >
+                    <Text style={styles.dangerText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.subtitle}>No budgets yet.</Text>
+          )}
+        </View>
+
+        <View style={styles.importCard}>
+          <View style={styles.importHeader}>
+            <View>
+              <Text style={styles.importTitle}>Transactions</Text>
+              <Text style={styles.subtitle}>Filter and review imports.</Text>
+            </View>
+            <TouchableOpacity style={styles.dangerBtn} onPress={handleBankingClear}>
+              <Text style={styles.dangerText}>Clear</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.filterRow}>
+            <View style={styles.filterBlock}>
+              <Text style={styles.metaText}>Month</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="YYYY-MM"
+                placeholderTextColor="#6f7f96"
+                value={bankingMonth}
+                onChangeText={setBankingMonth}
+              />
+            </View>
+            <View style={styles.filterBlock}>
+              <Text style={styles.metaText}>Category</Text>
+              <CategoryPicker
+                value={bankingCategory || "All"}
+                options={categoryOptions}
+                onChange={(value) => {
+                  const next = value === "All" ? "" : value;
+                  setBankingCategory(next);
+                  setBankingSubcategory("");
+                }}
+              />
+            </View>
+            <View style={styles.filterBlock}>
+              <Text style={styles.metaText}>Subcategory</Text>
+              <CategoryPicker
+                value={bankingSubcategory || "All"}
+                options={
+                  subcategoryOptions.length
+                    ? ["All", ...subcategoryOptions]
+                    : ["All"]
+                }
+                onChange={(value) =>
+                  setBankingSubcategory(value === "All" ? "" : value)
+                }
+              />
+            </View>
+            <View style={styles.filterBlock}>
+              <Text style={styles.metaText}>Institution</Text>
+              <CategoryPicker
+                value={bankingInstitutionFilter || "All"}
+                options={institutionOptions}
+                onChange={(value) =>
+                  setBankingInstitutionFilter(value === "All" ? "" : value)
+                }
+              />
+            </View>
+          </View>
+          {bankingLoading ? <Text style={styles.subtitle}>Loading...</Text> : null}
+          {bankingError ? <Text style={styles.error}>{bankingError}</Text> : null}
+          {!bankingLoading && bankingTransactions.length === 0 ? (
+            <Text style={styles.subtitle}>No transactions yet.</Text>
+          ) : null}
+          {bankingTransactions.map((item, index) => {
+            const rowGroups = bankingCategoryGroups.some(
+              (entry) => entry.name === item.category
+            )
+              ? bankingCategoryGroups
+              : [
+                  ...bankingCategoryGroups,
+                  {
+                    name: item.category || BANKING_DEFAULT_CATEGORY,
+                    subcategories: [
+                      item.subcategory === BANKING_DEFAULT_SUBCATEGORY
+                        ? item.category || BANKING_DEFAULT_CATEGORY
+                        : item.subcategory ||
+                          item.category ||
+                          BANKING_DEFAULT_SUBCATEGORY
+                    ]
+                  }
+                ];
+            const selectedCategory = item.category || BANKING_DEFAULT_CATEGORY;
+            const normalizedSubcategory =
+              item.subcategory === BANKING_DEFAULT_SUBCATEGORY
+                ? ""
+                : item.subcategory;
+            const selectedGroup = rowGroups.find(
+              (entry) => entry.name === selectedCategory
+            );
+            const selectedSubcategory = selectedGroup?.subcategories?.includes(
+              normalizedSubcategory
+            )
+              ? normalizedSubcategory
+              : selectedGroup?.subcategories?.[0] ||
+                normalizedSubcategory ||
+                BANKING_DEFAULT_SUBCATEGORY;
+            const isUpdating = bankingUpdatingId === item.id;
+            return (
+              <View style={styles.previewBlock} key={item.id || `${item.tx_date}-${index}`}>
+                <Text style={styles.previewTitle}>
+                  {item.tx_date} - {item.institution}
+                </Text>
+                <Text style={styles.metaText}>{item.description}</Text>
+                <Text
+                  style={[
+                    styles.metaText,
+                    item.amount < 0 ? styles.negValue : styles.posValue
+                  ]}
+                >
+                  {formatCurrency(item.amount)}
+                </Text>
+                <View style={styles.bankingEditRow}>
+                  <View style={styles.bankingEditBlock}>
+                    <Text style={styles.metaText}>Category</Text>
+                    <BankingCategoryPicker
+                      value={{
+                        category: selectedCategory,
+                        subcategory: selectedSubcategory
+                      }}
+                      groups={rowGroups}
+                      onChange={(category, subcategory) => {
+                        if (isUpdating) {
+                          return;
+                        }
+                        handleBankingCategoryUpdate(item.id, category, subcategory);
+                      }}
+                    />
+                  </View>
+                </View>
+              </View>
+            );
+          })}
         </View>
       </>
     );
@@ -3745,6 +4875,22 @@ export default function App() {
                 <TouchableOpacity
                   style={[
                     styles.tabButton,
+                    homeTab === "banking" && styles.tabButtonActive
+                  ]}
+                  onPress={() => setHomeTab("banking")}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      homeTab === "banking" && styles.tabTextActive
+                    ]}
+                  >
+                    Banking Transactions
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.tabButton,
                     homeTab === "goals" && styles.tabButtonActive
                   ]}
                   onPress={() => setHomeTab("goals")}
@@ -3763,6 +4909,8 @@ export default function App() {
                 ? renderOverview()
                 : homeTab === "investments"
                 ? renderHoldings()
+                : homeTab === "banking"
+                ? renderBanking()
                 : renderGoals()}
             </>
           )}
@@ -4087,6 +5235,59 @@ function CategoryPicker({ value, options, onChange }) {
   );
 }
 
+function BankingCategoryPicker({ value, groups, onChange }) {
+  const [open, setOpen] = useState(false);
+  const displayValue = value?.category
+    ? value.subcategory && value.subcategory !== value.category
+      ? `${value.category} - ${value.subcategory}`
+      : value.category
+    : "Select category";
+
+  return (
+    <View>
+      <TouchableOpacity style={styles.selectBtn} onPress={() => setOpen(true)}>
+        <Text style={styles.selectText}>{displayValue}</Text>
+      </TouchableOpacity>
+      <Modal transparent visible={open} animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setOpen(false)}
+          />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Select category</Text>
+            <ScrollView style={styles.modalList}>
+              {groups.map((group) => {
+                const options = group.subcategories?.length
+                  ? group.subcategories
+                  : [group.name];
+                return (
+                  <View key={group.name} style={styles.modalGroup}>
+                    <Text style={styles.modalGroupTitle}>{group.name}</Text>
+                    {options.map((option) => (
+                      <TouchableOpacity
+                        key={`${group.name}-${option}`}
+                        style={styles.modalOption}
+                        onPress={() => {
+                          onChange(group.name, option);
+                          setOpen(false);
+                        }}
+                      >
+                        <Text style={styles.modalOptionText}>{option}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -4124,6 +5325,10 @@ const styles = StyleSheet.create({
     color: "#e5eefb",
     paddingHorizontal: 12,
     paddingVertical: 10
+  },
+  textArea: {
+    minHeight: 90,
+    textAlignVertical: "top"
   },
   primaryBtn: {
     backgroundColor: "#2ad68d",
@@ -4325,6 +5530,23 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
     marginTop: 8
+  },
+  bankingSplit: {
+    gap: 12
+  },
+  bankingSplitBlock: {
+    gap: 8
+  },
+  bankingEditRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 6
+  },
+  bankingEditBlock: {
+    flex: 1,
+    minWidth: 140,
+    gap: 6
   },
   filterBlock: {
     flex: 1,
@@ -4655,6 +5877,68 @@ const styles = StyleSheet.create({
   modalOptionText: {
     color: "#dfe7f3",
     fontSize: 12
+  },
+  modalGroup: {
+    marginBottom: 8
+  },
+  modalGroupTitle: {
+    color: "#8fa0ba",
+    fontSize: 12,
+    textTransform: "uppercase",
+    marginTop: 6
+  },
+  barRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 6
+  },
+  barLabel: {
+    flex: 1,
+    color: "#c4d0e3",
+    fontSize: 11
+  },
+  barTrack: {
+    flex: 2,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden"
+  },
+  barFill: {
+    height: "100%",
+    borderRadius: 999
+  },
+  barFillPos: {
+    backgroundColor: "#2ad68d"
+  },
+  barFillNeg: {
+    backgroundColor: "#ff9c9c"
+  },
+  barFillCaution: {
+    backgroundColor: "#f2b441"
+  },
+  barFillWarn: {
+    backgroundColor: "#ff9c9c"
+  },
+  barFillDanger: {
+    backgroundColor: "#ff6b6b"
+  },
+  barValue: {
+    color: "#9aa9bf",
+    fontSize: 11
+  },
+  budgetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)"
+  },
+  budgetProgress: {
+    flex: 1,
+    gap: 6
   },
   detailCard: {
     backgroundColor: "#0f1728",

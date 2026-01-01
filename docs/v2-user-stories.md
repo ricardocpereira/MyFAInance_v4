@@ -419,8 +419,109 @@ Implementation notes:
 - No dedicated XSS hardening beyond framework defaults.
 
 
+## Epic 4 - Banking Transactions
+
+### US-4.1 Import file or paste data
+As a user, I want to import a file or paste transaction data, so I can add bank movements quickly.
+Acceptance criteria:
+- Accepts `.csv`, `.xls`, `.xlsx`.
+- Paste input available as alternative to file upload.
+- Preview flow before committing.
+Status: Implemented.
+Implementation notes:
+- Web + Mobile support file selection and paste preview.
+- Santander, Revolut, and ActivoBank formats validated in preview.
+
+
+### US-4.2 Automatic column mapping + manual override
+As a user, I want automatic column detection so I don't have to map fields manually.
+Acceptance criteria:
+- Date, description, amount, balance, debit/credit, currency detected.
+- Manual override per column.
+Status: Implemented.
+Implementation notes:
+- Header heuristic with normalized keywords.
+- Mapping UI on preview (web + mobile).
+
+
+### US-4.3 Select institution of origin
+As a user, I want to associate transactions with a bank.
+Acceptance criteria:
+- Institution field required before commit.
+- Institutions list is reused for filtering.
+Status: Implemented.
+Implementation notes:
+- `banking_institutions` table + per-portfolio list.
+
+
+### US-4.4 Persist and browse transactions
+As a user, I want to store imported transactions and browse them with filters.
+Acceptance criteria:
+- Transactions saved with category/subcategory defaults.
+- Filters by month, category, subcategory, institution.
+Status: Implemented.
+Implementation notes:
+- `banking_transactions` table; filterable endpoint.
+- Web + Mobile list with filter controls.
+- Inline category edits update the transaction and refresh learned rules.
+- Single macro + subcategory picker per transaction (web + mobile).
+
+
+### US-4.5 Clear imported banking transactions
+As a user, I want to clear imported banking transactions, so I can reset the list.
+Acceptance criteria:
+- Clear action deletes imports, transactions, and institutions for the portfolio.
+- Requires confirmation.
+Status: Implemented.
+Implementation notes:
+- `POST /portfolios/{id}/banking/clear` endpoint.
+- Web + Mobile "Clear transactions" action.
+
+
+### US-4.6 Categorização inteligente e aprendizagem
+As a user, I want automatic categorization based on description and learn from corrections.
+Status: Implemented (rule-based learning).
+Implementation notes:
+- `banking_category_rules` stores per-portfolio rules keyed by normalized description + institution.
+- Imports apply exact-match rules to fill category/subcategory when defaults are used.
+- Keyword pre-analysis assigns a default category/subcategory when no rule matches.
+- Editing a transaction category updates the row and saves/updates the rule for future imports.
+
+
+### US-4.7 Banking dashboard summary
+As a user, I want a quick summary of my banking movements.
+Acceptance criteria:
+- Shows income, expenses, net, and top spending category.
+- Updates based on the current filters.
+Status: Implemented.
+Implementation notes:
+- Summary cards in Banking Transactions for web + mobile.
+
+### US-4.8 Banking analytics charts
+As a user, I want simple charts for my banking transactions.
+Acceptance criteria:
+- Spending by category chart (expenses only).
+- Monthly net chart (income minus expenses).
+- Updates after reclassifying a transaction.
+Status: Implemented.
+Implementation notes:
+- Web uses bar charts with existing chart styles.
+- Mobile shows bar rows for categories and monthly net.
+
+### US-4.9 Budgets per category
+As a user, I want to set monthly budgets per category so I can track spending limits.
+Acceptance criteria:
+- Create/update budget for a month + category with an amount.
+- Budgets show spent, remaining, and percentage.
+- Budgets update when transaction categories change.
+- Budgets can be deleted.
+Status: Implemented.
+Implementation notes:
+- Budgets stored in `banking_budgets` with month + category + amount.
+- Web + Mobile budget forms with progress bars and delete actions.
+
+
 ## Future sections (WIP)
 - Stocks
-- Transactions
 - MyGoals
 - Portfolio Management
