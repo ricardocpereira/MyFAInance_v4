@@ -194,6 +194,21 @@
   color: #9aa9bf;
 }
 
+.success {
+  color: #7de0b2;
+  font-size: 12px;
+}
+
+.error {
+  color: #ff9c9c;
+  font-size: 12px;
+}
+
+.muted {
+  color: #9aa9bf;
+  font-size: 12px;
+}
+
 .login-topbar {
   display: flex;
   align-items: center;
@@ -2247,6 +2262,87 @@
 
 .cockpit-fire {
   grid-column: span 8;
+}
+
+.debt-page {
+  display: grid;
+  gap: 20px;
+}
+
+.debt-header h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.debt-header p {
+  margin: 6px 0 0;
+  color: #96a6c2;
+}
+
+.debt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.debt-card {
+  background: rgba(12, 20, 40, 0.85);
+  border-radius: 18px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 12px;
+}
+
+.debt-card header h3 {
+  margin: 0;
+}
+
+.debt-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.debt-preview span {
+  display: block;
+  font-size: 11px;
+  color: #9aa9bf;
+}
+
+.debt-preview strong {
+  font-size: 14px;
+}
+
+.debt-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.debt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.debt-table th,
+.debt-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: left;
+}
+
+.debt-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #7f8ea7;
+  letter-spacing: 0.08em;
+}
+
+.debt-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .cockpit-kicker {

@@ -24,6 +24,14 @@ type BudgetRow = {
   percent: number;
 };
 
+type DebtRow = {
+  id: number;
+  name: string;
+  current_balance: number;
+  monthly_payment: number;
+  percent_paid: number;
+};
+
 type CockpitProps = {
   t: Translation;
   token: string;
@@ -48,6 +56,8 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
   const [institutionsError, setInstitutionsError] = useState("");
   const [budgets, setBudgets] = useState<BudgetRow[]>([]);
   const [budgetsError, setBudgetsError] = useState("");
+  const [debts, setDebts] = useState<DebtRow[]>([]);
+  const [debtsError, setDebtsError] = useState("");
 
   const currencyLabel = portfolio?.currency || "EUR";
   const currencyFormatter = useMemo(
@@ -75,6 +85,7 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
       setHistoryMonthly([]);
       setInstitutions([]);
       setBudgets([]);
+      setDebts([]);
       return;
     }
     let active = true;
@@ -82,6 +93,7 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
     setHistoryError("");
     setInstitutionsError("");
     setBudgetsError("");
+    setDebtsError("");
 
     const fetchJson = (path: string) =>
       fetch(`${API_BASE}${path}`, {
@@ -188,10 +200,50 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
         }
       });
 
+    fetchJson(`/debts`)
+      .then(({ ok, data }) => {
+        if (!active) {
+          return;
+        }
+        if (!ok) {
+          throw new Error("debts");
+        }
+        const items = (data.items || []).map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          current_balance: Number(item.current_balance) || 0,
+          monthly_payment: Number(item.monthly_payment) || 0,
+          percent_paid: Number(item.percent_paid) || 0
+        }));
+        setDebts(items);
+      })
+      .catch(() => {
+        if (active) {
+          setDebtsError(t.debts.loadError);
+        }
+      });
+
     return () => {
       active = false;
     };
   }, [portfolio?.id, t, token]);
+
+  const debtTotals = useMemo(() => {
+    const totalBalance = debts.reduce(
+      (sum, item) => sum + (Number(item.current_balance) || 0),
+      0
+    );
+    const totalMonthly = debts.reduce(
+      (sum, item) => sum + (Number(item.monthly_payment) || 0),
+      0
+    );
+    const avgPercent =
+      debts.length > 0
+        ? debts.reduce((sum, item) => sum + (Number(item.percent_paid) || 0), 0) /
+          debts.length
+        : 0;
+    return { totalBalance, totalMonthly, avgPercent };
+  }, [debts]);
 
   const historySeries = useMemo(() => {
     return [...historyMonthly].sort((a, b) => a.month.localeCompare(b.month));
@@ -433,7 +485,32 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
           <header>
             <h3>{t.cockpit.debtTitle}</h3>
           </header>
-          <p className="chart-sub">{t.cockpit.debtEmpty}</p>
+          {debts.length ? (
+            <div className="cockpit-list">
+              <div className="cockpit-list-row">
+                <div>
+                  <strong>{t.debts.table.balance}</strong>
+                  <span>{formatCurrency(debtTotals.totalBalance)}</span>
+                </div>
+                <div>
+                  <strong>{t.debts.table.monthly}</strong>
+                  <span>{formatCurrency(debtTotals.totalMonthly)}</span>
+                </div>
+              </div>
+              <div className="cockpit-list-row">
+                <div>
+                  <strong>{t.debts.percentPaid}</strong>
+                  <span>{debtTotals.avgPercent.toFixed(1)}%</span>
+                </div>
+                <div>
+                  <strong>{t.debts.table.debt}</strong>
+                  <span>{debts.length}</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="chart-sub">{debtsError || t.cockpit.debtEmpty}</p>
+          )}
         </article>
 
         <article className="cockpit-card cockpit-fire">

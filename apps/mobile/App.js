@@ -59,6 +59,20 @@ export default function App() {
   const [deletePortfolioMessage, setDeletePortfolioMessage] = useState("");
   const [deletePortfolioError, setDeletePortfolioError] = useState("");
   const [deletingPortfolio, setDeletingPortfolio] = useState(false);
+  const [debts, setDebts] = useState([]);
+  const [debtsLoading, setDebtsLoading] = useState(false);
+  const [debtsError, setDebtsError] = useState("");
+  const [debtsMessage, setDebtsMessage] = useState("");
+  const [debtName, setDebtName] = useState("");
+  const [debtOriginalAmount, setDebtOriginalAmount] = useState("");
+  const [debtCurrentBalance, setDebtCurrentBalance] = useState("");
+  const [debtMonthlyPayment, setDebtMonthlyPayment] = useState("");
+  const [debtEditingId, setDebtEditingId] = useState(null);
+  const [debtSaving, setDebtSaving] = useState(false);
+  const [profileAgeInput, setProfileAgeInput] = useState("");
+  const [profileAgeSaving, setProfileAgeSaving] = useState(false);
+  const [profileAgeMessage, setProfileAgeMessage] = useState("");
+  const [profileAgeError, setProfileAgeError] = useState("");
 
   const [santanderFile, setSantanderFile] = useState(null);
   const [santanderItems, setSantanderItems] = useState([]);
@@ -596,6 +610,35 @@ export default function App() {
     }
   };
 
+  const loadProfileAge = async () => {
+    if (!token) {
+      return;
+    }
+    setProfileAgeError("");
+    try {
+      const data = await authJson("/profile");
+      setProfileAgeInput(data.age ? String(data.age) : "");
+    } catch (err) {
+      setProfileAgeError("Unable to load profile age.");
+    }
+  };
+
+  const loadDebts = async () => {
+    if (!token) {
+      return;
+    }
+    setDebtsLoading(true);
+    setDebtsError("");
+    try {
+      const data = await authJson("/debts");
+      setDebts(data.items || []);
+    } catch (err) {
+      setDebtsError("Unable to load debts.");
+    } finally {
+      setDebtsLoading(false);
+    }
+  };
+
   const openInstitutionDetail = async (institution) => {
     if (!activePortfolio) {
       return;
@@ -915,6 +958,117 @@ export default function App() {
               setDeletePortfolioError("Unable to delete portfolio.");
             } finally {
               setDeletingPortfolio(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const resetDebtForm = () => {
+    setDebtName("");
+    setDebtOriginalAmount("");
+    setDebtCurrentBalance("");
+    setDebtMonthlyPayment("");
+    setDebtEditingId(null);
+  };
+
+  const handleSaveProfileAge = async () => {
+    if (!token) {
+      return;
+    }
+    setProfileAgeSaving(true);
+    setProfileAgeMessage("");
+    setProfileAgeError("");
+    const trimmed = profileAgeInput.trim();
+    const payload =
+      trimmed.length === 0 ? { age: null } : { age: Number.parseInt(trimmed, 10) };
+    if (payload.age !== null && !Number.isFinite(payload.age)) {
+      setProfileAgeError("Invalid age.");
+      setProfileAgeSaving(false);
+      return;
+    }
+    try {
+      const data = await authJson("/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      setProfileAgeInput(data.age ? String(data.age) : "");
+      setProfileAgeMessage("Age saved.");
+    } catch (err) {
+      setProfileAgeError("Unable to save age.");
+    } finally {
+      setProfileAgeSaving(false);
+    }
+  };
+
+  const handleSaveDebt = async () => {
+    if (!token) {
+      return;
+    }
+    setDebtsMessage("");
+    setDebtsError("");
+    const original = parseInputNumber(debtOriginalAmount);
+    const balance = parseInputNumber(debtCurrentBalance);
+    const monthly = parseInputNumber(debtMonthlyPayment);
+    if (!debtName.trim() || original === null || balance === null || monthly === null) {
+      setDebtsError("Fill in all debt fields.");
+      return;
+    }
+    setDebtSaving(true);
+    try {
+      const data = await authJson(
+        debtEditingId ? `/debts/${debtEditingId}` : "/debts",
+        {
+          method: debtEditingId ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: debtName.trim(),
+            original_amount: original,
+            current_balance: balance,
+            monthly_payment: monthly
+          })
+        }
+      );
+      const saved = data.debt;
+      setDebts((prev) =>
+        debtEditingId
+          ? prev.map((item) => (item.id === debtEditingId ? saved : item))
+          : [saved, ...prev]
+      );
+      setDebtsMessage(debtEditingId ? "Debt updated." : "Debt saved.");
+      resetDebtForm();
+    } catch (err) {
+      setDebtsError("Unable to save debt.");
+    } finally {
+      setDebtSaving(false);
+    }
+  };
+
+  const handleEditDebt = (debt) => {
+    setDebtEditingId(debt.id);
+    setDebtName(debt.name);
+    setDebtOriginalAmount(String(debt.original_amount));
+    setDebtCurrentBalance(String(debt.current_balance));
+    setDebtMonthlyPayment(String(debt.monthly_payment));
+  };
+
+  const handleDeleteDebt = (debtId) => {
+    Alert.alert(
+      "Delete debt",
+      "This will remove the debt entry. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await authJson(`/debts/${debtId}`, { method: "DELETE" });
+              setDebts((prev) => prev.filter((item) => item.id !== debtId));
+            } catch (err) {
+              setDebtsError("Unable to delete debt.");
             }
           }
         }
@@ -2198,6 +2352,14 @@ export default function App() {
     loadBankingBudgets(activePortfolio.id);
   }, [mode, homeTab, activePortfolio?.id, bankingBudgetMonth, token]);
 
+  useEffect(() => {
+    if (mode !== "home" || (homeTab !== "debts" && homeTab !== "cockpit")) {
+      return;
+    }
+    loadProfileAge();
+    loadDebts();
+  }, [mode, homeTab, token]);
+
   const categoryOptions = useMemo(
     () => [...localCategories, "Unknown"],
     [localCategories]
@@ -2364,6 +2526,48 @@ export default function App() {
     const percent = total ? (spent / total) * 100 : 0;
     return { total, spent, remaining, percent };
   }, [bankingBudgets]);
+
+  const cockpitDebtTotals = useMemo(() => {
+    const totalBalance = debts.reduce(
+      (sum, item) => sum + (Number(item.current_balance) || 0),
+      0
+    );
+    const totalMonthly = debts.reduce(
+      (sum, item) => sum + (Number(item.monthly_payment) || 0),
+      0
+    );
+    const avgPercent =
+      debts.length > 0
+        ? debts.reduce((sum, item) => sum + (Number(item.percent_paid) || 0), 0) /
+          debts.length
+        : 0;
+    return { totalBalance, totalMonthly, avgPercent, count: debts.length };
+  }, [debts]);
+
+  const debtPreview = useMemo(() => {
+    const original = parseInputNumber(debtOriginalAmount);
+    const balance = parseInputNumber(debtCurrentBalance);
+    const monthly = parseInputNumber(debtMonthlyPayment);
+    const age = profileAgeInput ? Number.parseInt(profileAgeInput, 10) : null;
+    let percentPaid = null;
+    let monthsRemaining = null;
+    let payoffAge = null;
+    if (original && original > 0 && balance !== null) {
+      percentPaid = ((original - balance) / original) * 100;
+    }
+    if (monthly && monthly > 0 && balance !== null) {
+      monthsRemaining = Math.ceil(balance / monthly);
+    }
+    if (age !== null && Number.isFinite(age) && monthsRemaining !== null) {
+      payoffAge = age + monthsRemaining / 12;
+    }
+    return { original, balance, monthly, percentPaid, monthsRemaining, payoffAge };
+  }, [
+    debtOriginalAmount,
+    debtCurrentBalance,
+    debtMonthlyPayment,
+    profileAgeInput
+  ]);
 
   const holdingsCategories = useMemo(() => {
     if (holdingsView === "overall") {
@@ -2553,7 +2757,33 @@ export default function App() {
 
         <View style={styles.chartCard}>
           <Text style={styles.sectionTitle}>Debt summary</Text>
-          <Text style={styles.subtitle}>No debts tracked yet.</Text>
+          {debtsLoading ? (
+            <Text style={styles.subtitle}>Loading...</Text>
+          ) : debts.length ? (
+            <>
+              <View style={styles.metricRow}>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Outstanding</Text>
+                  <Text style={styles.metricValue}>
+                    {formatCurrency(cockpitDebtTotals.totalBalance)}
+                  </Text>
+                </View>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Monthly</Text>
+                  <Text style={styles.metricValue}>
+                    {formatCurrency(cockpitDebtTotals.totalMonthly)}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.subtitle}>
+                Avg paid {cockpitDebtTotals.avgPercent.toFixed(1)}%
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.subtitle}>
+              {debtsError || "No debts tracked yet."}
+            </Text>
+          )}
         </View>
 
         <View style={styles.chartCard}>
@@ -4241,6 +4471,190 @@ export default function App() {
     );
   };
 
+  const renderDebts = () => (
+    <>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Debts</Text>
+        <Text style={styles.subtitle}>Track your active debts.</Text>
+      </View>
+
+      <View style={styles.importCard}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Profile age</Text>
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={handleSaveProfileAge}
+            disabled={profileAgeSaving}
+          >
+            <Text style={styles.secondaryBtnText}>
+              {profileAgeSaving ? "Saving..." : "Save age"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <TextInput
+          style={styles.input}
+          placeholder="e.g. 35"
+          placeholderTextColor="#6f7f96"
+          keyboardType="number-pad"
+          value={profileAgeInput}
+          onChangeText={setProfileAgeInput}
+        />
+        {profileAgeMessage ? <Text style={styles.message}>{profileAgeMessage}</Text> : null}
+        {profileAgeError ? <Text style={styles.error}>{profileAgeError}</Text> : null}
+      </View>
+
+      <View style={styles.importCard}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>
+            {debtEditingId ? "Edit debt" : "Add debt"}
+          </Text>
+          {debtEditingId ? (
+            <TouchableOpacity style={styles.secondaryBtn} onPress={resetDebtForm}>
+              <Text style={styles.secondaryBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <View style={styles.bankingEditRow}>
+          <View style={styles.bankingEditBlock}>
+            <Text style={styles.subtitle}>Debt name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Home loan"
+              placeholderTextColor="#6f7f96"
+              value={debtName}
+              onChangeText={setDebtName}
+            />
+          </View>
+          <View style={styles.bankingEditBlock}>
+            <Text style={styles.subtitle}>Original amount</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="0.00"
+              placeholderTextColor="#6f7f96"
+              keyboardType="decimal-pad"
+              value={debtOriginalAmount}
+              onChangeText={setDebtOriginalAmount}
+            />
+          </View>
+          <View style={styles.bankingEditBlock}>
+            <Text style={styles.subtitle}>Remaining debt</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="0.00"
+              placeholderTextColor="#6f7f96"
+              keyboardType="decimal-pad"
+              value={debtCurrentBalance}
+              onChangeText={setDebtCurrentBalance}
+            />
+          </View>
+          <View style={styles.bankingEditBlock}>
+            <Text style={styles.subtitle}>Monthly payment</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="0.00"
+              placeholderTextColor="#6f7f96"
+              keyboardType="decimal-pad"
+              value={debtMonthlyPayment}
+              onChangeText={setDebtMonthlyPayment}
+            />
+          </View>
+        </View>
+        <View style={styles.metricRow}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Paid</Text>
+            <Text style={styles.metricValue}>
+              {debtPreview.percentPaid === null
+                ? "N/A"
+                : `${debtPreview.percentPaid.toFixed(1)}%`}
+            </Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Months left</Text>
+            <Text style={styles.metricValue}>
+              {debtPreview.monthsRemaining === null
+                ? "N/A"
+                : debtPreview.monthsRemaining}
+            </Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Payoff age</Text>
+            <Text style={styles.metricValue}>
+              {debtPreview.payoffAge === null
+                ? "N/A"
+                : debtPreview.payoffAge.toFixed(1)}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={handleSaveDebt}
+            disabled={debtSaving}
+          >
+            <Text style={styles.primaryText}>
+              {debtSaving
+                ? "Saving..."
+                : debtEditingId
+                ? "Update debt"
+                : "Save debt"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {debtsMessage ? <Text style={styles.message}>{debtsMessage}</Text> : null}
+        {debtsError ? <Text style={styles.error}>{debtsError}</Text> : null}
+      </View>
+
+      <View style={styles.importCard}>
+        <Text style={styles.sectionTitle}>Debt summary</Text>
+        {debtsLoading ? (
+          <Text style={styles.subtitle}>Loading...</Text>
+        ) : debts.length ? (
+          debts.map((debt) => (
+            <View style={styles.previewBlock} key={`debt-${debt.id}`}>
+              <Text style={styles.previewTitle}>{debt.name}</Text>
+              <Text style={styles.metaText}>
+                Original: {formatCurrency(debt.original_amount)}
+              </Text>
+              <Text style={styles.metaText}>
+                Remaining debt: {formatCurrency(debt.current_balance)}
+              </Text>
+              <Text style={styles.metaText}>
+                Monthly: {formatCurrency(debt.monthly_payment)}
+              </Text>
+              <Text style={styles.metaText}>
+                Paid: {debt.percent_paid.toFixed(1)}%
+              </Text>
+              <Text style={styles.metaText}>
+                Months left:{" "}
+                {debt.months_remaining === null ? "N/A" : debt.months_remaining}
+              </Text>
+              <Text style={styles.metaText}>
+                Payoff age:{" "}
+                {debt.payoff_age === null ? "N/A" : debt.payoff_age.toFixed(1)}
+              </Text>
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={styles.secondaryBtn}
+                  onPress={() => handleEditDebt(debt)}
+                >
+                  <Text style={styles.secondaryBtnText}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.dangerBtn}
+                  onPress={() => handleDeleteDebt(debt.id)}
+                >
+                  <Text style={styles.dangerText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.subtitle}>{debtsError || "No debts yet."}</Text>
+        )}
+      </View>
+    </>
+  );
+
   const renderGoals = () => (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>MyGoals</Text>
@@ -5020,6 +5434,14 @@ export default function App() {
             {mode === "home"
               ? homeTab === "cockpit"
                 ? "Cockpit Overview"
+                : homeTab === "debts"
+                ? "Debts"
+                : homeTab === "investments"
+                ? "Investments"
+                : homeTab === "banking"
+                ? "Banking Transactions"
+                : homeTab === "goals"
+                ? "MyGoals"
                 : "MyPortfolios overview"
               : "Sign in to access your portfolio."}
           </Text>
@@ -5155,6 +5577,26 @@ export default function App() {
                     MyGoals
                   </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.tabButton,
+                    homeTab === "debts" && styles.tabButtonActive,
+                    !hasPortfolios && styles.tabButtonDisabled
+                  ]}
+                  onPress={() =>
+                    hasPortfolios ? setHomeTab("debts") : handleLockedTab()
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      homeTab === "debts" && styles.tabTextActive,
+                      !hasPortfolios && styles.tabTextDisabled
+                    ]}
+                  >
+                    Debts
+                  </Text>
+                </TouchableOpacity>
               </View>
               {homeTab === "cockpit"
                 ? renderCockpit()
@@ -5164,6 +5606,8 @@ export default function App() {
                 ? renderHoldings()
                 : homeTab === "banking"
                 ? renderBanking()
+                : homeTab === "debts"
+                ? renderDebts()
                 : renderGoals()}
             </>
           )}

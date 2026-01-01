@@ -14,6 +14,7 @@ import Login from "./pages/Login";
 import Holdings from "./pages/Holdings";
 import BankingTransactions from "./pages/BankingTransactions";
 import CockpitOverview from "./pages/CockpitOverview";
+import Debts from "./pages/Debts";
 import { type Language, translations } from "./content/translations";
 import PortfolioModal from "./components/PortfolioModal";
 
@@ -137,7 +138,8 @@ function App() {
       { path: "/portfolios", label: t.nav.portfolios },
       { path: "/holdings", label: t.nav.stocks, requiresPortfolio: true },
       { path: "/transactions", label: t.nav.transactions, requiresPortfolio: true },
-      { path: "/mygoals", label: t.nav.goals, wip: true }
+      { path: "/mygoals", label: t.nav.goals, wip: true },
+      { path: "/debts", label: t.nav.debts, requiresPortfolio: true }
     ],
     [t]
   );
@@ -451,6 +453,16 @@ function App() {
             element={
               isAuthenticated ? (
                 <WipPage title={t.nav.goals} label={t.wip.label} message={t.wip.message} />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/debts"
+            element={
+              isAuthenticated ? (
+                <Debts t={t} token={authToken} portfolio={activePortfolio} />
               ) : (
                 <Navigate to="/" replace />
               )

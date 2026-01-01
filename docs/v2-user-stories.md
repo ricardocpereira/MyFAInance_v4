@@ -537,6 +537,20 @@ Implementation notes:
 - Nav items for Investments/Banking are disabled when no portfolios.
 
 
+## Epic 9 - Debts
+
+### US-9.1 Track debts and payoff timeline
+As a user, I want to record my debts so I can see how much is left and when they will be paid off.
+Acceptance criteria:
+- New "Debts" button appears next to MyGoals in the header.
+- User can create/update/delete debts with name, original amount, current balance, and monthly payment.
+- System calculates months remaining and percent paid.
+- If user sets age in profile, payoff age is calculated.
+Status: Implemented.
+Implementation notes:
+- API endpoints `/profile` + `/debts` store age and debts.
+- Web + Mobile Debts screens show form, preview metrics, list, edit, and delete actions.
+
 ## Future sections (WIP)
 - Stocks
 - MyGoals
