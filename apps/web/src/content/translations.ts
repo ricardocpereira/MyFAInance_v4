@@ -3,11 +3,13 @@ export type Language = "en" | "pt" | "es";
 export const translations = {
   en: {
     nav: {
+      cockpit: "Cockpit Overview",
       portfolios: "MyPortfolios",
       stocks: "Investments",
       transactions: "Banking Transactions",
       goals: "MyGoals",
-      management: "Portfolio Management"
+      management: "Portfolio Management",
+      disabledHint: "Create a portfolio first."
     },
     actions: {
       add: "Add"
@@ -445,6 +447,30 @@ export const translations = {
         }
       }
     },
+    cockpit: {
+      title: "Cockpit Overview",
+      subtitle: "Your financial performance at a glance.",
+      performanceTitle: "Portfolio performance",
+      performanceValue: "Total portfolio value",
+      performanceDelta: "Change since start",
+      performanceTrend: "Monthly performance",
+      subPortfoliosTitle: "Sub-portfolios",
+      subPortfoliosEmpty: "No sub-portfolios yet.",
+      budgetTitle: "Monthly budget",
+      budgetStatus: "Budget status",
+      budgetSpent: "Spent",
+      budgetRemaining: "Remaining",
+      budgetEmpty: "No budgets yet.",
+      realEstateTitle: "Real estate income",
+      realEstateSubtitle: "Monthly income",
+      realEstateEmpty: "No real estate data yet.",
+      debtTitle: "Debt summary",
+      debtEmpty: "No debts tracked yet.",
+      fireTitle: "FIRE journey",
+      fireSubtitle: "Financial independence progress",
+      fireEmpty: "Set a goal in MyGoals to enable this view.",
+      empty: "Create a portfolio to unlock your cockpit."
+    },
     summary: {
       value: "Portfolio current value",
       investedLabel: "invested",
@@ -606,11 +632,13 @@ export const translations = {
   },
   pt: {
     nav: {
+      cockpit: "Cockpit Overview",
       portfolios: "MyPortfolios",
       stocks: "Investments",
       transactions: "Banking Transactions",
       goals: "MyGoals",
-      management: "Portfolio Management"
+      management: "Portfolio Management",
+      disabledHint: "Crie um portfolio primeiro."
     },
     actions: {
       add: "Adicionar"
@@ -1048,6 +1076,30 @@ export const translations = {
         }
       }
     },
+    cockpit: {
+      title: "Cockpit Overview",
+      subtitle: "Resumo financeiro num relance.",
+      performanceTitle: "Desempenho do portfolio",
+      performanceValue: "Valor total do portfolio",
+      performanceDelta: "Variacao desde o inicio",
+      performanceTrend: "Desempenho mensal",
+      subPortfoliosTitle: "Sub-portfolios",
+      subPortfoliosEmpty: "Sem sub-portfolios.",
+      budgetTitle: "Orcamento mensal",
+      budgetStatus: "Estado do orcamento",
+      budgetSpent: "Gasto",
+      budgetRemaining: "Restante",
+      budgetEmpty: "Sem orcamentos.",
+      realEstateTitle: "Renda imobiliaria",
+      realEstateSubtitle: "Renda mensal",
+      realEstateEmpty: "Sem dados de imobiliario.",
+      debtTitle: "Resumo de dividas",
+      debtEmpty: "Sem dividas registadas.",
+      fireTitle: "Jornada FIRE",
+      fireSubtitle: "Progresso para independencia financeira",
+      fireEmpty: "Defina um objetivo em MyGoals.",
+      empty: "Crie um portfolio para desbloquear o cockpit."
+    },
     summary: {
       value: "Valor atual do portfolio",
       investedLabel: "investido",
@@ -1209,11 +1261,13 @@ export const translations = {
   },
   es: {
     nav: {
+      cockpit: "Cockpit Overview",
       portfolios: "MyPortfolios",
       stocks: "Investments",
       transactions: "Banking Transactions",
       goals: "MyGoals",
-      management: "Portfolio Management"
+      management: "Portfolio Management",
+      disabledHint: "Crea un portfolio primero."
     },
     actions: {
       add: "Agregar"
@@ -1650,6 +1704,30 @@ export const translations = {
           actions: "Acciones"
         }
       }
+    },
+    cockpit: {
+      title: "Cockpit Overview",
+      subtitle: "Resumen financiero de un vistazo.",
+      performanceTitle: "Desempeno del portfolio",
+      performanceValue: "Valor total del portfolio",
+      performanceDelta: "Cambio desde el inicio",
+      performanceTrend: "Performance mensual",
+      subPortfoliosTitle: "Sub-portfolios",
+      subPortfoliosEmpty: "Sin sub-portfolios.",
+      budgetTitle: "Presupuesto mensual",
+      budgetStatus: "Estado del presupuesto",
+      budgetSpent: "Gastado",
+      budgetRemaining: "Restante",
+      budgetEmpty: "Sin presupuestos.",
+      realEstateTitle: "Ingresos inmobiliarios",
+      realEstateSubtitle: "Ingreso mensual",
+      realEstateEmpty: "Sin datos inmobiliarios.",
+      debtTitle: "Resumen de deudas",
+      debtEmpty: "Sin deudas registradas.",
+      fireTitle: "Jornada FIRE",
+      fireSubtitle: "Progreso hacia independencia financiera",
+      fireEmpty: "Define un objetivo en MyGoals.",
+      empty: "Crea un portfolio para desbloquear el cockpit."
     },
     summary: {
       value: "Valor actual del portfolio",

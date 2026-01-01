@@ -45,7 +45,7 @@ export default function App() {
   const [institutionDetailOpen, setInstitutionDetailOpen] = useState(false);
   const [institutionDetailLoading, setInstitutionDetailLoading] = useState(false);
   const [institutionDetailError, setInstitutionDetailError] = useState("");
-  const [homeTab, setHomeTab] = useState("portfolios");
+  const [homeTab, setHomeTab] = useState("cockpit");
   const [portfolioView, setPortfolioView] = useState("overview");
   const [localCategories, setLocalCategories] = useState([]);
   const [categoryInput, setCategoryInput] = useState("");
@@ -794,6 +794,7 @@ export default function App() {
     if (data.status === "ok") {
       setToken(data.token);
       setMode("home");
+      setHomeTab("cockpit");
       setMessage("Logged in.");
       return;
     }
@@ -2187,7 +2188,11 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (mode !== "home" || homeTab !== "banking" || !activePortfolio) {
+    if (
+      mode !== "home" ||
+      (homeTab !== "banking" && homeTab !== "cockpit") ||
+      !activePortfolio
+    ) {
       return;
     }
     loadBankingBudgets(activePortfolio.id);
@@ -2326,6 +2331,40 @@ export default function App() {
     return withChange.slice(-5).reverse();
   }, [dailyHistory]);
 
+  const cockpitDelta = useMemo(() => {
+    if (historySeries.length < 2) {
+      return { value: 0, percent: 0 };
+    }
+    const first = historySeries[0];
+    const last = historySeries[historySeries.length - 1];
+    const delta = (Number(last.total) || 0) - (Number(first.total) || 0);
+    const percent = first.total ? (delta / first.total) * 100 : 0;
+    return { value: delta, percent };
+  }, [historySeries]);
+
+  const cockpitTopInstitutions = useMemo(() => {
+    return [...institutions]
+      .sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0))
+      .slice(0, 5);
+  }, [institutions]);
+
+  const cockpitBudgetTotals = useMemo(() => {
+    const total = bankingBudgets.reduce(
+      (sum, item) => sum + (Number(item.amount) || 0),
+      0
+    );
+    const spent = bankingBudgets.reduce(
+      (sum, item) => sum + (Number(item.spent) || 0),
+      0
+    );
+    const remaining = bankingBudgets.reduce(
+      (sum, item) => sum + (Number(item.remaining) || 0),
+      0
+    );
+    const percent = total ? (spent / total) * 100 : 0;
+    return { total, spent, remaining, percent };
+  }, [bankingBudgets]);
+
   const holdingsCategories = useMemo(() => {
     if (holdingsView === "overall") {
       const set = new Set();
@@ -2352,6 +2391,187 @@ export default function App() {
     });
     return Array.from(set);
   }, [holdingsItems]);
+
+  const renderCockpit = () => {
+    if (!activePortfolio) {
+      return (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Cockpit Overview</Text>
+          <Text style={styles.subtitle}>Create a portfolio first.</Text>
+        </View>
+      );
+    }
+    const budgetPercent = Math.min(100, cockpitBudgetTotals.percent || 0);
+    const budgetStatusStyle =
+      cockpitBudgetTotals.percent >= 100
+        ? styles.barFillDanger
+        : cockpitBudgetTotals.percent >= 90
+        ? styles.barFillWarn
+        : cockpitBudgetTotals.percent >= 70
+        ? styles.barFillCaution
+        : styles.barFillPos;
+    return (
+      <>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Cockpit Overview</Text>
+          <Text style={styles.subtitle}>
+            Your financial performance at a glance.
+          </Text>
+        </View>
+
+        <View style={styles.chartCard}>
+          <Text style={styles.sectionTitle}>Portfolio performance</Text>
+          <Text style={styles.metricValue}>
+            {formatCurrency(summary?.total)}
+          </Text>
+          <Text style={styles.subtitle}>Total portfolio value</Text>
+          <View style={styles.metricRow}>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Change since start</Text>
+              <Text style={styles.metricValue}>
+                {formatSigned(cockpitDelta.value)}
+              </Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Change %</Text>
+              <Text style={styles.metricValue}>
+                {formatSignedPercent(cockpitDelta.percent)}
+              </Text>
+            </View>
+          </View>
+          {historySeries.length > 1 ? (
+            <Svg width={280} height={140}>
+              <Path
+                d={historySeries
+                  .map((item, index) => {
+                    const width = 260;
+                    const height = 100;
+                    const padding = 10;
+                    const range = historyRange.max - historyRange.min || 1;
+                    const xStep =
+                      historySeries.length > 1
+                        ? width / (historySeries.length - 1)
+                        : 0;
+                    const x = padding + index * xStep;
+                    const y =
+                      padding +
+                      (height -
+                        ((item.total - historyRange.min) / range) * height);
+                    return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+                  })
+                  .join(" ")}
+                stroke="#2ad68d"
+                strokeWidth={2}
+                fill="none"
+              />
+            </Svg>
+          ) : (
+            <Text style={styles.subtitle}>No history yet.</Text>
+          )}
+        </View>
+
+        <View style={styles.chartCard}>
+          <Text style={styles.sectionTitle}>Sub-portfolios</Text>
+          {cockpitTopInstitutions.length ? (
+            cockpitTopInstitutions.map((item) => {
+              const delta = item.vs_last_month ?? item.gains ?? 0;
+              const deltaPercent = item.profit_percent ?? 0;
+              return (
+                <View style={styles.tableRow} key={item.institution}>
+                  <View style={styles.tableCell}>
+                    <Text style={styles.tableTitle}>{item.institution}</Text>
+                    <Text style={styles.subtitle}>
+                      {formatCurrency(item.total)}
+                    </Text>
+                  </View>
+                  <View style={[styles.tableCell, styles.tableCellRight]}>
+                    <Text
+                      style={[
+                        styles.tableValue,
+                        delta >= 0 ? styles.posValue : styles.negValue
+                      ]}
+                    >
+                      {formatSigned(delta)}
+                    </Text>
+                    <Text style={styles.subtitle}>
+                      {formatSignedPercent(deltaPercent)}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.subtitle}>No sub-portfolios yet.</Text>
+          )}
+        </View>
+
+        <View style={styles.chartCard}>
+          <Text style={styles.sectionTitle}>Monthly budget</Text>
+          {bankingBudgets.length ? (
+            <>
+              <View style={styles.metricRow}>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Spent</Text>
+                  <Text style={styles.metricValue}>
+                    {formatCurrency(cockpitBudgetTotals.spent)}
+                  </Text>
+                </View>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Remaining</Text>
+                  <Text style={styles.metricValue}>
+                    {formatCurrency(cockpitBudgetTotals.remaining)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.barRow}>
+                <View style={styles.barTrack}>
+                  <View
+                    style={[
+                      styles.barFill,
+                      budgetStatusStyle,
+                      { width: `${budgetPercent}%` }
+                    ]}
+                  />
+                </View>
+                <Text style={styles.barValue}>
+                  {budgetPercent.toFixed(1)}%
+                </Text>
+              </View>
+            </>
+          ) : (
+            <Text style={styles.subtitle}>
+              {bankingBudgetsError || "No budgets yet."}
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.chartCard}>
+          <Text style={styles.sectionTitle}>Real estate income</Text>
+          <Text style={styles.subtitle}>Monthly income</Text>
+          <Text style={styles.metricValue}>{formatCurrency(0)}</Text>
+        </View>
+
+        <View style={styles.chartCard}>
+          <Text style={styles.sectionTitle}>Debt summary</Text>
+          <Text style={styles.subtitle}>No debts tracked yet.</Text>
+        </View>
+
+        <View style={styles.chartCard}>
+          <Text style={styles.sectionTitle}>FIRE journey</Text>
+          <Text style={styles.subtitle}>
+            Financial independence progress
+          </Text>
+          <View style={styles.barRow}>
+            <View style={styles.barTrack}>
+              <View style={[styles.barFill, styles.barFillPos, { width: "12%" }]} />
+            </View>
+            <Text style={styles.barValue}>12%</Text>
+          </View>
+          <Text style={styles.subtitle}>Set a goal in MyGoals to enable this view.</Text>
+        </View>
+      </>
+    );
+  };
 
   const renderOverview = () => (
     <>
@@ -4028,6 +4248,11 @@ export default function App() {
     </View>
   );
 
+  const hasPortfolios = portfolios.length > 0;
+  const handleLockedTab = () => {
+    Alert.alert("Create a portfolio first.");
+  };
+
   const renderCategories = () => {
     if (!activePortfolio) {
       return <Text style={styles.subtitle}>Select a portfolio first.</Text>;
@@ -4793,7 +5018,9 @@ export default function App() {
           <Text style={styles.title}>MyFAInance Mobile</Text>
           <Text style={styles.subtitle}>
             {mode === "home"
-              ? "MyPortfolios overview"
+              ? homeTab === "cockpit"
+                ? "Cockpit Overview"
+                : "MyPortfolios overview"
               : "Sign in to access your portfolio."}
           </Text>
 
@@ -4843,6 +5070,22 @@ export default function App() {
                 <TouchableOpacity
                   style={[
                     styles.tabButton,
+                    homeTab === "cockpit" && styles.tabButtonActive
+                  ]}
+                  onPress={() => setHomeTab("cockpit")}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      homeTab === "cockpit" && styles.tabTextActive
+                    ]}
+                  >
+                    Cockpit Overview
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.tabButton,
                     homeTab === "portfolios" && styles.tabButtonActive
                   ]}
                   onPress={() => setHomeTab("portfolios")}
@@ -4859,14 +5102,18 @@ export default function App() {
                 <TouchableOpacity
                   style={[
                     styles.tabButton,
-                    homeTab === "investments" && styles.tabButtonActive
+                    homeTab === "investments" && styles.tabButtonActive,
+                    !hasPortfolios && styles.tabButtonDisabled
                   ]}
-                  onPress={() => setHomeTab("investments")}
+                  onPress={() =>
+                    hasPortfolios ? setHomeTab("investments") : handleLockedTab()
+                  }
                 >
                   <Text
                     style={[
                       styles.tabText,
-                      homeTab === "investments" && styles.tabTextActive
+                      homeTab === "investments" && styles.tabTextActive,
+                      !hasPortfolios && styles.tabTextDisabled
                     ]}
                   >
                     Investments
@@ -4875,14 +5122,18 @@ export default function App() {
                 <TouchableOpacity
                   style={[
                     styles.tabButton,
-                    homeTab === "banking" && styles.tabButtonActive
+                    homeTab === "banking" && styles.tabButtonActive,
+                    !hasPortfolios && styles.tabButtonDisabled
                   ]}
-                  onPress={() => setHomeTab("banking")}
+                  onPress={() =>
+                    hasPortfolios ? setHomeTab("banking") : handleLockedTab()
+                  }
                 >
                   <Text
                     style={[
                       styles.tabText,
-                      homeTab === "banking" && styles.tabTextActive
+                      homeTab === "banking" && styles.tabTextActive,
+                      !hasPortfolios && styles.tabTextDisabled
                     ]}
                   >
                     Banking Transactions
@@ -4905,7 +5156,9 @@ export default function App() {
                   </Text>
                 </TouchableOpacity>
               </View>
-              {homeTab === "portfolios"
+              {homeTab === "cockpit"
+                ? renderCockpit()
+                : homeTab === "portfolios"
                 ? renderOverview()
                 : homeTab === "investments"
                 ? renderHoldings()
@@ -5456,6 +5709,9 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.04)"
   },
+  tabButtonDisabled: {
+    opacity: 0.45
+  },
   tabButtonActive: {
     backgroundColor: "#0f2330",
     borderColor: "#2ad68d"
@@ -5464,6 +5720,9 @@ const styles = StyleSheet.create({
     color: "#9aa9bf",
     fontSize: 12,
     fontWeight: "600"
+  },
+  tabTextDisabled: {
+    color: "#6f7f96"
   },
   tabTextActive: {
     color: "#2ad68d"

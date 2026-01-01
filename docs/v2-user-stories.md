@@ -520,6 +520,22 @@ Implementation notes:
 - Budgets stored in `banking_budgets` with month + category + amount.
 - Web + Mobile budget forms with progress bars and delete actions.
 
+## Cockpit Overview
+### US-8.1 Cockpit Overview landing page
+As a user, I want a cockpit dashboard after login with portfolio performance, sub-portfolios, budgets, and headline metrics.
+Acceptance criteria:
+- Cockpit Overview is the landing page after login on web + mobile.
+- Shows portfolio performance chart (monthly history), change since start, and total value.
+- Lists top sub-portfolios (institutions) with totals and gains.
+- Shows monthly budget status aggregated from banking budgets.
+- Shows placeholder sections for real estate, debts, and FIRE progress.
+- When no portfolios exist, only Cockpit Overview, MyPortfolios, and MyGoals remain active.
+Status: Implemented.
+Implementation notes:
+- Web route `/cockpit` with new layout and cards.
+- Mobile tab "Cockpit Overview" with stacked cards and performance chart.
+- Nav items for Investments/Banking are disabled when no portfolios.
+
 
 ## Future sections (WIP)
 - Stocks

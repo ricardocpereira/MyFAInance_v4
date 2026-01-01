@@ -60,6 +60,18 @@
   color: #08131f;
 }
 
+.nav-item.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.06);
+  color: #9aa9bf;
+}
+
+.nav-item.disabled.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: #9aa9bf;
+}
+
 .wip {
   background: rgba(255, 255, 255, 0.12);
   color: #b7c3da;
@@ -2166,6 +2178,154 @@
   font-size: 13px;
 }
 
+.cockpit-page {
+  display: grid;
+  gap: 20px;
+}
+
+.cockpit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  background: rgba(12, 20, 40, 0.75);
+  border-radius: 18px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cockpit-header p {
+  color: #9aa9bf;
+  font-size: 12px;
+}
+
+.cockpit-header-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cockpit-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.cockpit-card {
+  background: rgba(12, 20, 40, 0.85);
+  border-radius: 18px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 12px;
+}
+
+.cockpit-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.cockpit-performance {
+  grid-column: span 8;
+}
+
+.cockpit-subportfolios {
+  grid-column: span 4;
+}
+
+.cockpit-summary,
+.cockpit-budget,
+.cockpit-realestate {
+  grid-column: span 4;
+}
+
+.cockpit-debt {
+  grid-column: span 4;
+}
+
+.cockpit-fire {
+  grid-column: span 8;
+}
+
+.cockpit-kicker {
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #7ddfbb;
+  margin-bottom: 6px;
+}
+
+.cockpit-delta {
+  text-align: right;
+  font-size: 11px;
+  color: #9aa9bf;
+  display: grid;
+  gap: 4px;
+}
+
+.cockpit-delta strong {
+  font-size: 14px;
+}
+
+.cockpit-chart {
+  width: 100%;
+  height: 160px;
+}
+
+.cockpit-list {
+  display: grid;
+  gap: 10px;
+}
+
+.cockpit-list-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(8, 14, 28, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cockpit-list-row strong {
+  display: block;
+  font-size: 13px;
+}
+
+.cockpit-list-row span {
+  display: block;
+  font-size: 12px;
+  color: #9aa9bf;
+}
+
+.cockpit-list-metric {
+  text-align: right;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.cockpit-metric {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #9aa9bf;
+}
+
+.cockpit-metric strong {
+  color: #dfe7f3;
+  font-size: 14px;
+}
+
+.cockpit-progress {
+  display: grid;
+  gap: 6px;
+}
+
 @media (max-width: 1000px) {
   .top-bar {
     flex-direction: column;
@@ -2193,6 +2353,20 @@
 
   .preview-table .row {
     grid-template-columns: 1fr;
+  }
+
+  .cockpit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cockpit-performance,
+  .cockpit-subportfolios,
+  .cockpit-summary,
+  .cockpit-budget,
+  .cockpit-realestate,
+  .cockpit-debt,
+  .cockpit-fire {
+    grid-column: span 1;
   }
 }
 

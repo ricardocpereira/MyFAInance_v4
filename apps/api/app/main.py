@@ -333,6 +333,16 @@ class BankingBudgetRequest(BaseModel):
     month: str | None = None
 
 
+class ProfileUpdateRequest(BaseModel):
+    age: int | None = None
+
+
+class DebtRequest(BaseModel):
+    name: str
+    original_amount: float
+    current_balance: float
+    monthly_payment: float
+
 
 class CategoryRemoveRequest(BaseModel):
     category: str
@@ -399,6 +409,21 @@ def _init_db() -> None:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 UNIQUE(owner_email, name)
+            );
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                email TEXT PRIMARY KEY,
+                age INTEGER,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS debts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_email TEXT NOT NULL,
+                name TEXT NOT NULL,
+                original_amount REAL NOT NULL,
+                current_balance REAL NOT NULL,
+                monthly_payment REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS santander_imports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -749,6 +774,170 @@ def _set_password(email: str, salt: str, password_hash: str) -> None:
             "UPDATE users SET salt = ?, password_hash = ?, updated_at = ? WHERE email = ?",
             (salt, password_hash, datetime.utcnow().isoformat(), email),
                 )
+
+
+def _get_profile_age(email: str) -> int | None:
+    with _db_connection() as conn:
+        row = conn.execute(
+            "SELECT age FROM user_profiles WHERE email = ?",
+            (email,),
+        ).fetchone()
+    return row["age"] if row and row["age"] is not None else None
+
+
+def _set_profile_age(email: str, age: int | None) -> None:
+    with _db_connection() as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO user_profiles (email, age, updated_at)
+            VALUES (?, ?, ?)
+            """,
+            (email, age, datetime.utcnow().isoformat()),
+        )
+
+
+def _get_debt(email: str, debt_id: int) -> dict | None:
+    with _db_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT id, name, original_amount, current_balance, monthly_payment, created_at, updated_at
+            FROM debts
+            WHERE id = ? AND owner_email = ?
+            """,
+            (debt_id, email),
+        ).fetchone()
+    if not row:
+        return None
+    age = _get_profile_age(email)
+    original_amount = float(row["original_amount"] or 0)
+    current_balance = float(row["current_balance"] or 0)
+    monthly_payment = float(row["monthly_payment"] or 0)
+    percent_paid = 0.0
+    if original_amount > 0:
+        percent_paid = (original_amount - current_balance) / original_amount * 100
+    months_remaining = None
+    if monthly_payment > 0:
+        months_remaining = int((current_balance + monthly_payment - 1) // monthly_payment)
+    payoff_age = None
+    if age is not None and months_remaining is not None:
+        payoff_age = age + months_remaining / 12
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "original_amount": original_amount,
+        "current_balance": current_balance,
+        "monthly_payment": monthly_payment,
+        "percent_paid": percent_paid,
+        "months_remaining": months_remaining,
+        "payoff_age": payoff_age,
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _list_debts(email: str) -> list[dict]:
+    with _db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, name, original_amount, current_balance, monthly_payment, created_at, updated_at
+            FROM debts
+            WHERE owner_email = ?
+            ORDER BY created_at DESC
+            """,
+            (email,),
+        ).fetchall()
+    age = _get_profile_age(email)
+    items: list[dict] = []
+    for row in rows:
+        original_amount = float(row["original_amount"] or 0)
+        current_balance = float(row["current_balance"] or 0)
+        monthly_payment = float(row["monthly_payment"] or 0)
+        percent_paid = 0.0
+        if original_amount > 0:
+            percent_paid = (original_amount - current_balance) / original_amount * 100
+        months_remaining = None
+        if monthly_payment > 0:
+            months_remaining = int((current_balance + monthly_payment - 1) // monthly_payment)
+        payoff_age = None
+        if age is not None and months_remaining is not None:
+            payoff_age = age + months_remaining / 12
+        items.append(
+            {
+                "id": row["id"],
+                "name": row["name"],
+                "original_amount": original_amount,
+                "current_balance": current_balance,
+                "monthly_payment": monthly_payment,
+                "percent_paid": percent_paid,
+                "months_remaining": months_remaining,
+                "payoff_age": payoff_age,
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+            }
+        )
+    return items
+
+
+def _create_debt(email: str, payload: DebtRequest) -> dict:
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO debts (owner_email, name, original_amount, current_balance, monthly_payment, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                email,
+                payload.name,
+                payload.original_amount,
+                payload.current_balance,
+                payload.monthly_payment,
+                now,
+                now,
+            ),
+        )
+        debt_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    return _get_debt(email, int(debt_id))
+
+
+def _update_debt(email: str, debt_id: int, payload: DebtRequest) -> dict | None:
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        row = conn.execute(
+            "SELECT id FROM debts WHERE id = ? AND owner_email = ?",
+            (debt_id, email),
+        ).fetchone()
+        if not row:
+            return None
+        conn.execute(
+            """
+            UPDATE debts
+            SET name = ?, original_amount = ?, current_balance = ?, monthly_payment = ?, updated_at = ?
+            WHERE id = ? AND owner_email = ?
+            """,
+            (
+                payload.name,
+                payload.original_amount,
+                payload.current_balance,
+                payload.monthly_payment,
+                now,
+                debt_id,
+                email,
+            ),
+        )
+    return _get_debt(email, debt_id)
+
+
+def _delete_debt(email: str, debt_id: int) -> bool:
+    with _db_connection() as conn:
+        row = conn.execute(
+            "SELECT id FROM debts WHERE id = ? AND owner_email = ?",
+            (debt_id, email),
+        ).fetchone()
+        if not row:
+            return False
+        conn.execute("DELETE FROM debts WHERE id = ?", (debt_id,))
+    return True
 
 
 _init_db()
@@ -6173,6 +6362,68 @@ def logout(authorization: str | None = Header(default=None)) -> dict:
     token = _require_token(authorization)
     _delete_session(token)
     return {"status": "logged_out"}
+
+
+@app.get("/profile")
+def get_profile(authorization: str | None = Header(default=None)) -> dict:
+    session = _require_session(authorization)
+    return {"age": _get_profile_age(session["email"])}
+
+
+@app.post("/profile")
+def update_profile(payload: ProfileUpdateRequest, authorization: str | None = Header(default=None)) -> dict:
+    session = _require_session(authorization)
+    age_value = payload.age
+    if age_value is not None and age_value <= 0:
+        raise HTTPException(status_code=400, detail="Age must be greater than 0.")
+    _set_profile_age(session["email"], age_value)
+    return {"status": "saved", "age": age_value}
+
+
+@app.get("/debts")
+def list_debts(authorization: str | None = Header(default=None)) -> dict:
+    session = _require_session(authorization)
+    return {"items": _list_debts(session["email"])}
+
+
+@app.post("/debts")
+def create_debt(payload: DebtRequest, authorization: str | None = Header(default=None)) -> dict:
+    session = _require_session(authorization)
+    if payload.original_amount <= 0:
+        raise HTTPException(status_code=400, detail="Original amount must be greater than 0.")
+    if payload.current_balance < 0:
+        raise HTTPException(status_code=400, detail="Current balance cannot be negative.")
+    if payload.monthly_payment <= 0:
+        raise HTTPException(status_code=400, detail="Monthly payment must be greater than 0.")
+    debt = _create_debt(session["email"], payload)
+    return {"status": "saved", "debt": debt}
+
+
+@app.put("/debts/{debt_id}")
+def update_debt(
+    debt_id: int,
+    payload: DebtRequest,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    session = _require_session(authorization)
+    if payload.original_amount <= 0:
+        raise HTTPException(status_code=400, detail="Original amount must be greater than 0.")
+    if payload.current_balance < 0:
+        raise HTTPException(status_code=400, detail="Current balance cannot be negative.")
+    if payload.monthly_payment <= 0:
+        raise HTTPException(status_code=400, detail="Monthly payment must be greater than 0.")
+    debt = _update_debt(session["email"], debt_id, payload)
+    if not debt:
+        raise HTTPException(status_code=404, detail="Debt not found.")
+    return {"status": "saved", "debt": debt}
+
+
+@app.delete("/debts/{debt_id}")
+def delete_debt(debt_id: int, authorization: str | None = Header(default=None)) -> dict:
+    session = _require_session(authorization)
+    if not _delete_debt(session["email"], debt_id):
+        raise HTTPException(status_code=404, detail="Debt not found.")
+    return {"status": "deleted"}
 
 
 @app.get("/portfolios")
