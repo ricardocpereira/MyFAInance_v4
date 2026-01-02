@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
-import Svg, { G, Path, Circle } from "react-native-svg";
+import Svg, { G, Path, Circle, Line } from "react-native-svg";
 
 const BANKING_DEFAULT_CATEGORY = "Sem categoria";
 const BANKING_DEFAULT_SUBCATEGORY = "Sem subcategoria";
@@ -73,6 +73,33 @@ export default function App() {
   const [profileAgeSaving, setProfileAgeSaving] = useState(false);
   const [profileAgeMessage, setProfileAgeMessage] = useState("");
   const [profileAgeError, setProfileAgeError] = useState("");
+  const [goals, setGoals] = useState([]);
+  const [goalsLoading, setGoalsLoading] = useState(false);
+  const [goalsError, setGoalsError] = useState("");
+  const [goalsMessage, setGoalsMessage] = useState("");
+  const [activeGoalId, setActiveGoalId] = useState(null);
+  const [goalInputs, setGoalInputs] = useState(null);
+  const [goalMetrics, setGoalMetrics] = useState(null);
+  const [goalProjection, setGoalProjection] = useState([]);
+  const [simulationMetrics, setSimulationMetrics] = useState(null);
+  const [simulationProjection, setSimulationProjection] = useState([]);
+  const [goalContributions, setGoalContributions] = useState([]);
+  const [goalNameInput, setGoalNameInput] = useState("");
+  const [goalRenameInput, setGoalRenameInput] = useState("");
+  const [goalForm, setGoalForm] = useState({
+    start_date: "",
+    duration_years: "",
+    sp500_return: "",
+    desired_monthly: "",
+    planned_monthly: "",
+    withdrawal_rate: "",
+    initial_investment: "",
+    inflation_rate: "",
+    portfolio_inflation_rate: "",
+    return_method: "cagr"
+  });
+  const [goalContributionDate, setGoalContributionDate] = useState("");
+  const [goalContributionAmount, setGoalContributionAmount] = useState("");
 
   const [santanderFile, setSantanderFile] = useState(null);
   const [santanderItems, setSantanderItems] = useState([]);
@@ -305,6 +332,18 @@ export default function App() {
     return `${currency} ${Number(value || 0).toFixed(2)}`;
   };
 
+  const formatAxisCurrency = (value) => {
+    const currency = activePortfolio?.currency || "EUR";
+    const absValue = Math.abs(value);
+    let shortValue = Number(value || 0).toFixed(0);
+    if (absValue >= 1_000_000) {
+      shortValue = `${(value / 1_000_000).toFixed(1)}M`;
+    } else if (absValue >= 1_000) {
+      shortValue = `${(value / 1_000).toFixed(0)}k`;
+    }
+    return `${currency} ${shortValue}`;
+  };
+
   const parseInputNumber = (value) => {
     if (!value) {
       return null;
@@ -314,15 +353,13 @@ export default function App() {
       return null;
     }
     cleaned = cleaned.replace(/[^0-9,.-]/g, "");
-    if (cleaned.includes(",") && cleaned.includes(".")) {
-      if (cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".")) {
-        cleaned = cleaned.replace(/\./g, "");
-        cleaned = cleaned.replace(",", ".");
-      } else {
-        cleaned = cleaned.replace(/,/g, "");
-      }
-    } else if (cleaned.includes(",")) {
-      cleaned = cleaned.replace(",", ".");
+    const lastComma = cleaned.lastIndexOf(",");
+    const lastDot = cleaned.lastIndexOf(".");
+    if (lastComma !== -1 || lastDot !== -1) {
+      const lastSep = Math.max(lastComma, lastDot);
+      const integerPart = cleaned.slice(0, lastSep).replace(/[.,]/g, "");
+      const decimalPart = cleaned.slice(lastSep + 1).replace(/[.,]/g, "");
+      cleaned = decimalPart ? `${integerPart}.${decimalPart}` : integerPart;
     }
     const parsed = Number(cleaned);
     return Number.isFinite(parsed) ? parsed : null;
@@ -636,6 +673,268 @@ export default function App() {
       setDebtsError("Unable to load debts.");
     } finally {
       setDebtsLoading(false);
+    }
+  };
+
+  const loadGoals = async () => {
+    if (!token) {
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    try {
+      const data = await authJson("/goals");
+      const items = data.items || [];
+      setGoals(items);
+      if (!activeGoalId && items.length) {
+        setActiveGoalId(items[0].id);
+      }
+    } catch (err) {
+      setGoalsError("Unable to load goals.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const loadGoalDetails = async (goalId) => {
+    if (!token || !goalId) {
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    try {
+      const query = activePortfolio ? `?portfolio_id=${activePortfolio.id}` : "";
+      const data = await authJson(`/goals/${goalId}${query}`);
+      setGoalInputs(data.inputs || null);
+      setGoalMetrics(data.portfolio_fire?.metrics || null);
+      setGoalProjection(data.portfolio_fire?.projection || []);
+      setSimulationMetrics(data.simulation_fire?.metrics || null);
+      setSimulationProjection(data.simulation_fire?.projection || []);
+      setGoalContributions(data.contributions || []);
+      setGoalRenameInput(data.goal?.name || "");
+      const inputs = data.inputs || {};
+      setGoalForm({
+        start_date: inputs.start_date || "",
+        duration_years:
+          inputs.duration_years !== undefined ? String(inputs.duration_years) : "",
+        sp500_return:
+          inputs.sp500_return !== undefined
+            ? String(Number(inputs.sp500_return) * 100)
+            : "",
+        desired_monthly:
+          inputs.desired_monthly !== undefined ? String(inputs.desired_monthly) : "",
+        planned_monthly:
+          inputs.planned_monthly !== undefined
+            ? String(inputs.planned_monthly)
+            : inputs.desired_monthly !== undefined
+              ? String(inputs.desired_monthly)
+              : "",
+        withdrawal_rate:
+          inputs.withdrawal_rate !== undefined
+            ? String(Number(inputs.withdrawal_rate) * 100)
+            : "",
+        initial_investment:
+          inputs.initial_investment !== undefined
+            ? String(inputs.initial_investment)
+            : "",
+          inflation_rate:
+            inputs.inflation_rate !== undefined
+              ? String(Number(inputs.inflation_rate) * 100)
+              : "",
+          portfolio_inflation_rate:
+            inputs.portfolio_inflation_rate !== undefined
+              ? String(Number(inputs.portfolio_inflation_rate) * 100)
+              : inputs.inflation_rate !== undefined
+                ? String(Number(inputs.inflation_rate) * 100)
+                : "",
+          return_method: inputs.return_method || "cagr"
+        });
+    } catch (err) {
+      setGoalsError("Unable to load goals.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const handleCreateGoal = async () => {
+    if (!token || !goalNameInput.trim()) {
+      setGoalsError("Goal name is required.");
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    setGoalsMessage("");
+    try {
+      const data = await authJson("/goals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: goalNameInput.trim() })
+      });
+      setGoals((prev) => [...prev, data.goal]);
+      setActiveGoalId(data.goal.id);
+      setGoalNameInput("");
+      setGoalsMessage("Goal created.");
+    } catch (err) {
+      setGoalsError("Unable to save goal.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const handleRenameGoal = async () => {
+    if (!token || !activeGoalId || !goalRenameInput.trim()) {
+      setGoalsError("Goal name is required.");
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    setGoalsMessage("");
+    try {
+      const data = await authJson(`/goals/${activeGoalId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: goalRenameInput.trim() })
+      });
+      setGoals((prev) =>
+        prev.map((item) => (item.id === activeGoalId ? data.goal : item))
+      );
+      setGoalsMessage("Goal updated.");
+    } catch (err) {
+      setGoalsError("Unable to save goal.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const handleDeleteGoal = async () => {
+    if (!token || !activeGoalId) {
+      return;
+    }
+    const goal = goals.find((item) => item.id === activeGoalId);
+    if (goal?.is_default) {
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    setGoalsMessage("");
+    try {
+      await authJson(`/goals/${activeGoalId}`, { method: "DELETE" });
+      const remaining = goals.filter((item) => item.id !== activeGoalId);
+      setGoals(remaining);
+      setActiveGoalId(remaining.length ? remaining[0].id : null);
+      setGoalsMessage("Goal deleted.");
+    } catch (err) {
+      setGoalsError("Unable to delete goal.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const handleSaveGoalInputs = async () => {
+    if (!token || !activeGoalId) {
+      return;
+    }
+    const duration = parseInputNumber(goalForm.duration_years);
+    const sp500 = parseInputNumber(goalForm.sp500_return);
+    const desired = parseInputNumber(goalForm.desired_monthly);
+    const planned = parseInputNumber(goalForm.planned_monthly);
+    const withdrawal = parseInputNumber(goalForm.withdrawal_rate);
+    const initial = parseInputNumber(goalForm.initial_investment);
+    const inflation = parseInputNumber(goalForm.inflation_rate);
+    const portfolioInflation = parseInputNumber(goalForm.portfolio_inflation_rate);
+    if (
+      !goalForm.start_date ||
+      duration === null ||
+      sp500 === null ||
+      desired === null ||
+      planned === null ||
+      withdrawal === null ||
+      initial === null ||
+      inflation === null ||
+      portfolioInflation === null
+    ) {
+      setGoalsError("Fill all inputs before saving.");
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    setGoalsMessage("");
+    try {
+        await authJson(`/goals/${activeGoalId}/inputs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            start_date: goalForm.start_date,
+            duration_years: duration,
+            sp500_return: sp500,
+            desired_monthly: desired,
+            planned_monthly: planned,
+            withdrawal_rate: withdrawal,
+            initial_investment: initial,
+            inflation_rate: inflation,
+            portfolio_inflation_rate: portfolioInflation,
+            return_method: goalForm.return_method
+          })
+        });
+      setGoalsMessage("Inputs saved.");
+      loadGoalDetails(activeGoalId);
+    } catch (err) {
+      setGoalsError("Unable to save goal.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const handleAddGoalContribution = async () => {
+    if (!token || !activeGoalId) {
+      return;
+    }
+    const amount = parseInputNumber(goalContributionAmount);
+    if (!goalContributionDate || amount === null) {
+      setGoalsError("Contribution date and amount required.");
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    setGoalsMessage("");
+    try {
+      await authJson(`/goals/${activeGoalId}/contributions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contribution_date: goalContributionDate,
+          amount
+        })
+      });
+      setGoalContributionDate("");
+      setGoalContributionAmount("");
+      setGoalsMessage("Contribution saved.");
+      loadGoalDetails(activeGoalId);
+    } catch (err) {
+      setGoalsError("Unable to save contribution.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const handleDeleteGoalContribution = async (contributionId) => {
+    if (!token || !activeGoalId) {
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    setGoalsMessage("");
+    try {
+      await authJson(
+        `/goals/${activeGoalId}/contributions/${contributionId}`,
+        { method: "DELETE" }
+      );
+      setGoalsMessage("Contribution deleted.");
+      loadGoalDetails(activeGoalId);
+    } catch (err) {
+      setGoalsError("Unable to delete contribution.");
+    } finally {
+      setGoalsLoading(false);
     }
   };
 
@@ -2359,6 +2658,20 @@ export default function App() {
     loadProfileAge();
     loadDebts();
   }, [mode, homeTab, token]);
+
+  useEffect(() => {
+    if (mode !== "home" || homeTab !== "goals") {
+      return;
+    }
+    loadGoals();
+  }, [mode, homeTab, token]);
+
+  useEffect(() => {
+    if (mode !== "home" || homeTab !== "goals" || !activeGoalId) {
+      return;
+    }
+    loadGoalDetails(activeGoalId);
+  }, [mode, homeTab, activeGoalId, activePortfolio?.id, token]);
 
   const categoryOptions = useMemo(
     () => [...localCategories, "Unknown"],
@@ -4655,12 +4968,851 @@ export default function App() {
     </>
   );
 
-  const renderGoals = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>MyGoals</Text>
-      <Text style={styles.subtitle}>Coming soon.</Text>
-    </View>
-  );
+  const renderGoals = () => {
+    const goal = goals.find((item) => item.id === activeGoalId) || goals[0];
+    const formatStatus = (status) => {
+      if (!status || status === "ok") {
+        return null;
+      }
+      if (status === "missing") {
+        return "Missing target";
+      }
+      if (status === "imp") {
+        return "Impossible";
+      }
+      if (status === "achieved") {
+        return "FIRE achieved";
+      }
+      return status;
+    };
+    const formatCoast = (metrics) => {
+      if (!metrics) {
+        return "N/A";
+      }
+      return (
+        formatStatus(metrics.coast_status) ||
+        (metrics.coast_years !== null ? `${metrics.coast_years.toFixed(1)}y` : "N/A")
+      );
+    };
+    const formatFire = (metrics) => {
+      if (!metrics) {
+        return "N/A";
+      }
+      return (
+        formatStatus(metrics.fire_status) ||
+        (metrics.fire_years !== null
+          ? `FIRE in ${Math.floor(metrics.fire_years)}y ${metrics.fire_months ?? 0}m`
+          : "N/A")
+      );
+    };
+    const buildPath = (projection, key, maxValue) => {
+      if (!projection.length) {
+        return "";
+      }
+      const lastIndex = projection.length - 1;
+      let path = "";
+      let started = false;
+      projection.forEach((item, index) => {
+        const value =
+          key === "with_contrib"
+            ? item.with_contrib
+            : key === "without_contrib"
+              ? item.without_contrib
+              : item.coast_target;
+        if (value === null || !Number.isFinite(value)) {
+          started = false;
+          return;
+        }
+        const x = lastIndex === 0 ? 0 : (index / lastIndex) * 100;
+        const y = 100 - (value / maxValue) * 100;
+        path += `${started ? "L" : "M"} ${x} ${y} `;
+        started = true;
+      });
+      return path.trim();
+    };
+    const buildChart = (projection, metrics) => {
+      const maxValue = Math.max(
+        1,
+        ...projection.map((item) => item.with_contrib || 0),
+        ...projection.map((item) => item.without_contrib || 0),
+        ...projection.map((item) => item.coast_target || 0),
+        metrics?.fire_target || 0
+      );
+      const lastYear = projection.length ? projection[projection.length - 1].year : 0;
+      return {
+        maxValue,
+        lastYear,
+        fireTarget: metrics?.fire_target || null,
+        withPath: buildPath(projection, "with_contrib", maxValue),
+        withoutPath: buildPath(projection, "without_contrib", maxValue),
+        coastPath: buildPath(projection, "coast_target", maxValue)
+      };
+    };
+    const portfolioChart = buildChart(goalProjection, goalMetrics);
+    const simulationChart = buildChart(simulationProjection, simulationMetrics);
+    const coastLabel = formatCoast(goalMetrics);
+    const fireLabel = formatFire(goalMetrics);
+    const simulationCoastLabel = formatCoast(simulationMetrics);
+    const simulationFireLabel = formatFire(simulationMetrics);
+    const simulationInvested =
+      simulationMetrics?.invested_total ??
+      goalMetrics?.invested_total ??
+      null;
+
+    return (
+      <View style={styles.section}>
+        <View style={styles.importCard}>
+          <Text style={styles.sectionTitle}>MyGoals</Text>
+          <Text style={styles.subtitle}>Plan your FIRE journey.</Text>
+          <View style={styles.goalRow}>
+            <TextInput
+              style={styles.input}
+              placeholder="New goal name"
+              placeholderTextColor="#6f7f96"
+              value={goalNameInput}
+              onChangeText={setGoalNameInput}
+            />
+            <TouchableOpacity style={styles.secondaryBtn} onPress={handleCreateGoal}>
+              <Text style={styles.secondaryBtnText}>Add goal</Text>
+            </TouchableOpacity>
+            {goal && !goal.is_default ? (
+              <TouchableOpacity style={styles.dangerBtn} onPress={handleDeleteGoal}>
+                <Text style={styles.dangerText}>Delete</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.goalTabs}>
+          {goals.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={[
+                styles.goalTab,
+                item.id === goal?.id && styles.goalTabActive
+              ]}
+              onPress={() => setActiveGoalId(item.id)}
+            >
+              <Text
+                style={[
+                  styles.goalTabText,
+                  item.id === goal?.id && styles.goalTabTextActive
+                ]}
+              >
+                {item.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {goalsMessage ? <Text style={styles.message}>{goalsMessage}</Text> : null}
+        {goalsError ? <Text style={styles.error}>{goalsError}</Text> : null}
+
+        <View style={styles.importCard}>
+          <View style={styles.importHeader}>
+            <View>
+              <Text style={styles.importTitle}>Portfolio FIRE</Text>
+              <Text style={styles.sectionSubtitle}>
+                Based on your contribution history.
+              </Text>
+            </View>
+          </View>
+          {goal && !goal.is_default ? (
+            <View style={styles.goalRow}>
+              <TextInput
+                style={styles.input}
+                placeholder="Rename goal"
+                placeholderTextColor="#6f7f96"
+                value={goalRenameInput}
+                onChangeText={setGoalRenameInput}
+              />
+              <TouchableOpacity style={styles.secondaryBtn} onPress={handleRenameGoal}>
+                <Text style={styles.secondaryBtnText}>Rename</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.dangerBtn} onPress={handleDeleteGoal}>
+                <Text style={styles.dangerText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          <View style={styles.field}>
+            <Text style={styles.label}>Start date</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#6f7f96"
+              value={goalForm.start_date}
+              onChangeText={(value) =>
+                setGoalForm((prev) => ({ ...prev, start_date: value }))
+              }
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Duration (years)</Text>
+            <TextInput
+              style={styles.input}
+              value={goalForm.duration_years}
+              onChangeText={(value) =>
+                setGoalForm((prev) => ({ ...prev, duration_years: value }))
+              }
+            />
+          </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Expected portfolio % gains</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.sp500_return}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, sp500_return: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Desired monthly amount</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.desired_monthly}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, desired_monthly: value }))
+                  }
+                />
+              </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Safe withdrawal rate (%)</Text>
+            <TextInput
+              style={styles.input}
+              value={goalForm.withdrawal_rate}
+              onChangeText={(value) =>
+                setGoalForm((prev) => ({ ...prev, withdrawal_rate: value }))
+              }
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Initial investment</Text>
+            <TextInput
+              style={styles.input}
+              value={goalForm.initial_investment}
+              onChangeText={(value) =>
+                setGoalForm((prev) => ({ ...prev, initial_investment: value }))
+              }
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Return method</Text>
+            <View style={styles.goalToggleRow}>
+              <TouchableOpacity
+                style={[
+                  styles.goalToggleBtn,
+                  goalForm.return_method === "cagr" && styles.goalToggleActive
+                ]}
+                onPress={() =>
+                  setGoalForm((prev) => ({ ...prev, return_method: "cagr" }))
+                }
+              >
+                <Text
+                  style={[
+                    styles.goalToggleText,
+                    goalForm.return_method === "cagr" && styles.goalToggleTextActive
+                  ]}
+                >
+                  CAGR
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.goalToggleBtn,
+                  goalForm.return_method === "xirr" && styles.goalToggleActive
+                ]}
+                onPress={() =>
+                  setGoalForm((prev) => ({ ...prev, return_method: "xirr" }))
+                }
+              >
+                <Text
+                  style={[
+                    styles.goalToggleText,
+                    goalForm.return_method === "xirr" && styles.goalToggleTextActive
+                  ]}
+                >
+                  XIRR
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>ECB inflation (10Y avg)</Text>
+              <TextInput
+                style={styles.input}
+                value={goalForm.portfolio_inflation_rate}
+                onChangeText={(value) =>
+                  setGoalForm((prev) => ({ ...prev, portfolio_inflation_rate: value }))
+                }
+              />
+            </View>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleSaveGoalInputs}>
+              <Text style={styles.primaryText}>Save inputs</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.importCard}>
+          <Text style={styles.sectionTitle}>Portfolio results</Text>
+          {goalMetrics ? (
+            <View style={styles.metricRow}>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Years elapsed</Text>
+                <Text style={styles.metricValue}>
+                  {goalMetrics.years_elapsed.toFixed(1)}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Years remaining</Text>
+                <Text style={styles.metricValue}>
+                  {goalMetrics.years_remaining.toFixed(1)}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Avg contribution</Text>
+                <Text style={styles.metricValue}>
+                  {formatCurrency(goalMetrics.avg_monthly)}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <Text style={styles.subtitle}>No goal data yet.</Text>
+          )}
+          {goalMetrics ? (
+            <View style={styles.metricRow}>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Invested</Text>
+                <Text style={styles.metricValue}>
+                  {formatCurrency(goalMetrics.invested_total)}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Return</Text>
+                <Text style={styles.metricValue}>
+                  {goalMetrics.assumption_return === null
+                    ? goalMetrics.return_rate === null
+                      ? "N/A"
+                      : `${goalMetrics.return_rate.toFixed(2)}%`
+                    : `${goalMetrics.assumption_return.toFixed(2)}%`}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>XIRR/CAGR result</Text>
+                <Text style={styles.metricValue}>
+                  {goalMetrics.return_rate === null
+                    ? "N/A"
+                    : `${goalMetrics.return_rate.toFixed(2)}%`}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>FIRE target</Text>
+                <Text style={styles.metricValue}>
+                  {goalMetrics.fire_target === null
+                    ? "N/A"
+                    : formatCurrency(goalMetrics.fire_target)}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+          {goalMetrics ? (
+            <View style={styles.metricRow}>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Coast FIRE number</Text>
+                <Text style={styles.metricValue}>
+                  {goalMetrics.coast_target === null
+                    ? "N/A"
+                    : formatCurrency(goalMetrics.coast_target)}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Years to Coast FIRE</Text>
+                <Text style={styles.metricValue}>{coastLabel}</Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>FIRE timing</Text>
+                <Text style={styles.metricValue}>{fireLabel}</Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.chartCard}>
+          <View style={styles.chartHeader}>
+            <Text style={styles.chartTitle}>Portfolio FIRE projection</Text>
+            <Text style={styles.chartSubtitle}>Based on average contributions.</Text>
+          </View>
+            {goalProjection.length ? (
+              <>
+                <View style={styles.goalChartBody}>
+                  <View style={styles.goalChartAxis}>
+                    <Text style={styles.goalAxisText}>
+                      {formatAxisCurrency(portfolioChart.maxValue)}
+                    </Text>
+                    <Text style={styles.goalAxisText}>
+                      {formatAxisCurrency(portfolioChart.maxValue / 2)}
+                    </Text>
+                    <Text style={styles.goalAxisText}>{formatAxisCurrency(0)}</Text>
+                    <Text style={styles.goalAxisLabel}>
+                      Value ({activePortfolio?.currency || "EUR"})
+                    </Text>
+                  </View>
+                  <View style={styles.goalChartPlot}>
+                    <Svg viewBox="0 0 100 100" width="100%" height={160}>
+                      {portfolioChart.fireTarget ? (
+                        <Line
+                          x1="0"
+                          y1={100 - (portfolioChart.fireTarget / portfolioChart.maxValue) * 100}
+                          x2="100"
+                          y2={100 - (portfolioChart.fireTarget / portfolioChart.maxValue) * 100}
+                          stroke="#ff6b6b"
+                          strokeWidth="0.8"
+                        />
+                      ) : null}
+                      {portfolioChart.coastPath ? (
+                        <Path
+                          d={portfolioChart.coastPath}
+                          stroke="#4ea1ff"
+                          strokeDasharray="4 3"
+                          strokeWidth={1.1}
+                          fill="none"
+                        />
+                      ) : null}
+                      {portfolioChart.withoutPath ? (
+                        <Path
+                          d={portfolioChart.withoutPath}
+                          stroke="#2ad68d"
+                          strokeWidth={1.4}
+                          fill="none"
+                        />
+                      ) : null}
+                      {portfolioChart.withPath ? (
+                        <Path
+                          d={portfolioChart.withPath}
+                          stroke="#9aa9bf"
+                          strokeWidth={1.1}
+                          fill="none"
+                        />
+                      ) : null}
+                    </Svg>
+                  </View>
+                </View>
+                <View style={styles.goalChartXAxis}>
+                  <Text style={styles.goalAxisText}>0</Text>
+                  <Text style={styles.goalAxisText}>{portfolioChart.lastYear}</Text>
+                </View>
+                <Text style={styles.goalXAxisLabel}>Years</Text>
+                <View style={styles.goalChartLegend}>
+                  <View style={styles.goalLegendItem}>
+                    <View
+                      style={[styles.goalLegendDot, { backgroundColor: "#9aa9bf" }]}
+                    />
+                    <Text style={styles.goalLegendText}>
+                      Net worth with continued contributions
+                    </Text>
+                  </View>
+                  <View style={styles.goalLegendItem}>
+                    <View
+                      style={[styles.goalLegendDot, { backgroundColor: "#2ad68d" }]}
+                    />
+                    <Text style={styles.goalLegendText}>
+                      Net worth with no contributions after Coast FIRE milestone
+                    </Text>
+                  </View>
+                  <View style={styles.goalLegendItem}>
+                    <View
+                      style={[styles.goalLegendDot, { backgroundColor: "#4ea1ff" }]}
+                    />
+                    <Text style={styles.goalLegendText}>Coast FIRE number</Text>
+                  </View>
+                  <View style={styles.goalLegendItem}>
+                    <View
+                      style={[styles.goalLegendDot, { backgroundColor: "#ff6b6b" }]}
+                    />
+                    <Text style={styles.goalLegendText}>FIRE number</Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <Text style={styles.subtitle}>No projection data yet.</Text>
+            )}
+        </View>
+
+        <View style={styles.importCard}>
+          <Text style={styles.sectionTitle}>FIRE Simulation Playground</Text>
+          <Text style={styles.subtitle}>Adjust assumptions to simulate scenarios.</Text>
+          <View style={styles.field}>
+            <Text style={styles.label}>Start date</Text>
+            <TextInput
+              style={styles.input}
+              value={goalForm.start_date}
+              onChangeText={(value) =>
+                setGoalForm((prev) => ({ ...prev, start_date: value }))
+              }
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#6f7f96"
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Desired monthly amount</Text>
+            <TextInput
+              style={styles.input}
+              value={goalForm.desired_monthly}
+              onChangeText={(value) =>
+                setGoalForm((prev) => ({ ...prev, desired_monthly: value }))
+              }
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Planned monthly contribution</Text>
+            <TextInput
+              style={styles.input}
+              value={goalForm.planned_monthly}
+              onChangeText={(value) =>
+                setGoalForm((prev) => ({ ...prev, planned_monthly: value }))
+              }
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Value invested</Text>
+            <TextInput
+              style={styles.input}
+              value={goalForm.initial_investment}
+              onChangeText={(value) =>
+                setGoalForm((prev) => ({ ...prev, initial_investment: value }))
+              }
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Duration (years)</Text>
+            <TextInput
+              style={styles.input}
+              value={goalForm.duration_years}
+              onChangeText={(value) =>
+                setGoalForm((prev) => ({ ...prev, duration_years: value }))
+              }
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Expected portfolio % gains</Text>
+            <TextInput
+              style={styles.input}
+              value={goalForm.sp500_return}
+              onChangeText={(value) =>
+                setGoalForm((prev) => ({ ...prev, sp500_return: value }))
+              }
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Safe withdrawal rate (%)</Text>
+            <TextInput
+              style={styles.input}
+              value={goalForm.withdrawal_rate}
+              onChangeText={(value) =>
+                setGoalForm((prev) => ({ ...prev, withdrawal_rate: value }))
+              }
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Initial investment</Text>
+            <TextInput
+              style={styles.input}
+              value={goalForm.initial_investment}
+              onChangeText={(value) =>
+                setGoalForm((prev) => ({ ...prev, initial_investment: value }))
+              }
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Return method</Text>
+            <View style={styles.goalToggleRow}>
+              <TouchableOpacity
+                style={[
+                  styles.goalToggle,
+                  goalForm.return_method === "cagr" && styles.goalToggleActive
+                ]}
+                onPress={() => setGoalForm((prev) => ({ ...prev, return_method: "cagr" }))}
+              >
+                <Text
+                  style={[
+                    styles.goalToggleText,
+                    goalForm.return_method === "cagr" && styles.goalToggleTextActive
+                  ]}
+                >
+                  CAGR
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.goalToggle,
+                  goalForm.return_method === "xirr" && styles.goalToggleActive
+                ]}
+                onPress={() => setGoalForm((prev) => ({ ...prev, return_method: "xirr" }))}
+              >
+                <Text
+                  style={[
+                    styles.goalToggleText,
+                    goalForm.return_method === "xirr" && styles.goalToggleTextActive
+                  ]}
+                >
+                  XIRR
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Inflation</Text>
+            <TextInput
+              style={styles.input}
+              value={goalForm.inflation_rate}
+              onChangeText={(value) =>
+                setGoalForm((prev) => ({ ...prev, inflation_rate: value }))
+              }
+            />
+          </View>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleSaveGoalInputs}>
+              <Text style={styles.primaryText}>Save inputs</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.importCard}>
+          <Text style={styles.sectionTitle}>Simulation results</Text>
+          {simulationMetrics ? (
+            <View style={styles.metricRow}>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Years elapsed</Text>
+                <Text style={styles.metricValue}>
+                  {simulationMetrics.years_elapsed.toFixed(1)}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Years remaining</Text>
+                <Text style={styles.metricValue}>
+                  {simulationMetrics.years_remaining.toFixed(1)}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Planned monthly</Text>
+                <Text style={styles.metricValue}>
+                  {formatCurrency(simulationMetrics.avg_monthly)}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <Text style={styles.subtitle}>No simulation data yet.</Text>
+          )}
+          {simulationMetrics ? (
+            <View style={styles.metricRow}>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Invested</Text>
+                <Text style={styles.metricValue}>
+                  {formatCurrency(simulationMetrics.invested_total)}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Return</Text>
+                <Text style={styles.metricValue}>
+                  {simulationMetrics.assumption_return === null
+                    ? simulationMetrics.return_rate === null
+                      ? "N/A"
+                      : `${simulationMetrics.return_rate.toFixed(2)}%`
+                    : `${simulationMetrics.assumption_return.toFixed(2)}%`}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>XIRR/CAGR result</Text>
+                <Text style={styles.metricValue}>
+                  {simulationMetrics.return_rate === null
+                    ? "N/A"
+                    : `${simulationMetrics.return_rate.toFixed(2)}%`}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>FIRE target</Text>
+                <Text style={styles.metricValue}>
+                  {simulationMetrics.fire_target === null
+                    ? "N/A"
+                    : formatCurrency(simulationMetrics.fire_target)}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+          {simulationMetrics ? (
+            <View style={styles.metricRow}>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Coast FIRE number</Text>
+                <Text style={styles.metricValue}>
+                  {simulationMetrics.coast_target === null
+                    ? "N/A"
+                    : formatCurrency(simulationMetrics.coast_target)}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Years to Coast FIRE</Text>
+                <Text style={styles.metricValue}>{simulationCoastLabel}</Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>FIRE timing</Text>
+                <Text style={styles.metricValue}>{simulationFireLabel}</Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.chartCard}>
+          <View style={styles.chartHeader}>
+            <Text style={styles.chartTitle}>Simulation projection</Text>
+            <Text style={styles.chartSubtitle}>Based on desired monthly amount.</Text>
+          </View>
+            {simulationProjection.length ? (
+              <>
+                <View style={styles.goalChartBody}>
+                  <View style={styles.goalChartAxis}>
+                    <Text style={styles.goalAxisText}>
+                      {formatAxisCurrency(simulationChart.maxValue)}
+                    </Text>
+                    <Text style={styles.goalAxisText}>
+                      {formatAxisCurrency(simulationChart.maxValue / 2)}
+                    </Text>
+                    <Text style={styles.goalAxisText}>{formatAxisCurrency(0)}</Text>
+                    <Text style={styles.goalAxisLabel}>
+                      Value ({activePortfolio?.currency || "EUR"})
+                    </Text>
+                  </View>
+                  <View style={styles.goalChartPlot}>
+                    <Svg viewBox="0 0 100 100" width="100%" height={160}>
+                      {simulationChart.fireTarget ? (
+                        <Line
+                          x1="0"
+                          y1={100 - (simulationChart.fireTarget / simulationChart.maxValue) * 100}
+                          x2="100"
+                          y2={100 - (simulationChart.fireTarget / simulationChart.maxValue) * 100}
+                          stroke="#ff6b6b"
+                          strokeWidth="0.8"
+                        />
+                      ) : null}
+                      {simulationChart.coastPath ? (
+                        <Path
+                          d={simulationChart.coastPath}
+                          stroke="#4ea1ff"
+                          strokeDasharray="4 3"
+                          strokeWidth={1.1}
+                          fill="none"
+                        />
+                      ) : null}
+                      {simulationChart.withoutPath ? (
+                        <Path
+                          d={simulationChart.withoutPath}
+                          stroke="#2ad68d"
+                          strokeWidth={1.4}
+                          fill="none"
+                        />
+                      ) : null}
+                      {simulationChart.withPath ? (
+                        <Path
+                          d={simulationChart.withPath}
+                          stroke="#9aa9bf"
+                          strokeWidth={1.1}
+                          fill="none"
+                        />
+                      ) : null}
+                    </Svg>
+                  </View>
+                </View>
+                <View style={styles.goalChartXAxis}>
+                  <Text style={styles.goalAxisText}>0</Text>
+                  <Text style={styles.goalAxisText}>{simulationChart.lastYear}</Text>
+                </View>
+                <Text style={styles.goalXAxisLabel}>Years</Text>
+                <View style={styles.goalChartLegend}>
+                  <View style={styles.goalLegendItem}>
+                    <View
+                      style={[styles.goalLegendDot, { backgroundColor: "#9aa9bf" }]}
+                    />
+                    <Text style={styles.goalLegendText}>
+                      Net worth with continued contributions
+                    </Text>
+                  </View>
+                  <View style={styles.goalLegendItem}>
+                    <View
+                      style={[styles.goalLegendDot, { backgroundColor: "#2ad68d" }]}
+                    />
+                    <Text style={styles.goalLegendText}>
+                      Net worth with no contributions after Coast FIRE milestone
+                    </Text>
+                  </View>
+                  <View style={styles.goalLegendItem}>
+                    <View
+                      style={[styles.goalLegendDot, { backgroundColor: "#4ea1ff" }]}
+                    />
+                    <Text style={styles.goalLegendText}>Coast FIRE number</Text>
+                  </View>
+                  <View style={styles.goalLegendItem}>
+                    <View
+                      style={[styles.goalLegendDot, { backgroundColor: "#ff6b6b" }]}
+                    />
+                    <Text style={styles.goalLegendText}>FIRE number</Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <Text style={styles.subtitle}>No projection data yet.</Text>
+            )}
+        </View>
+
+        <View style={styles.importCard}>
+          <Text style={styles.sectionTitle}>Contributions</Text>
+          <View style={styles.field}>
+            <Text style={styles.label}>Date</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#6f7f96"
+              value={goalContributionDate}
+              onChangeText={setGoalContributionDate}
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Amount</Text>
+            <TextInput
+              style={styles.input}
+              value={goalContributionAmount}
+              onChangeText={setGoalContributionAmount}
+            />
+          </View>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={handleAddGoalContribution}
+            >
+              <Text style={styles.primaryText}>Add contribution</Text>
+            </TouchableOpacity>
+          </View>
+          {goalContributions.length ? (
+            goalContributions.map((item) => (
+              <View style={styles.previewRow} key={`goal-${item.id}`}>
+                <View>
+                  <Text style={styles.previewTitle}>{item.contribution_date}</Text>
+                  <Text style={styles.metaText}>{formatCurrency(item.amount)}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.dangerBtn}
+                  onPress={() => handleDeleteGoalContribution(item.id)}
+                >
+                  <Text style={styles.dangerText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.subtitle}>No contributions yet.</Text>
+          )}
+        </View>
+      </View>
+    );
+  };
 
   const hasPortfolios = portfolios.length > 0;
   const handleLockedTab = () => {
@@ -6023,6 +7175,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10
   },
+  readonlyValue: {
+    backgroundColor: "rgba(15, 23, 40, 0.7)",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    color: "#e5eefb",
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
   textArea: {
     minHeight: 90,
     textAlignVertical: "top"
@@ -6370,6 +7531,65 @@ const styles = StyleSheet.create({
     padding: 10,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)"
+  },
+  goalChartBody: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "stretch",
+    backgroundColor: "rgba(7,12,24,0.6)",
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)"
+  },
+  goalChartAxis: {
+    width: 78,
+    justifyContent: "space-between"
+  },
+  goalChartPlot: {
+    flex: 1
+  },
+  goalChartXAxis: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginLeft: 78,
+    marginTop: 6
+  },
+  goalAxisText: {
+    fontSize: 11,
+    color: "#8ea0bd",
+    textAlign: "right"
+  },
+  goalAxisLabel: {
+    fontSize: 10,
+    color: "#6f7f96",
+    textAlign: "right"
+  },
+  goalXAxisLabel: {
+    fontSize: 10,
+    color: "#6f7f96",
+    marginLeft: 78,
+    marginTop: 4
+  },
+  goalChartLegend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 8
+  },
+  goalLegendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6
+  },
+  goalLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999
+  },
+  goalLegendText: {
+    fontSize: 10,
+    color: "#9aa9bf"
   },
   chartBars: {
     flexDirection: "row",
@@ -6762,5 +7982,71 @@ const styles = StyleSheet.create({
   },
   negValue: {
     color: "#ff9c9c"
+  },
+  goalRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    alignItems: "center"
+  },
+  goalTabs: {
+    marginTop: 8
+  },
+  goalTab: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    marginRight: 8
+  },
+  goalTabActive: {
+    backgroundColor: "#2ad68d",
+    borderColor: "#2ad68d"
+  },
+  goalTabText: {
+    color: "#c7d3ea",
+    fontSize: 12,
+    fontWeight: "600"
+  },
+  goalTabTextActive: {
+    color: "#052016"
+  },
+  goalToggleRow: {
+    flexDirection: "row",
+    gap: 8
+  },
+  goalToggleBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.04)"
+  },
+  goalToggleActive: {
+    borderColor: "#2ad68d",
+    backgroundColor: "rgba(42,214,141,0.2)"
+  },
+  goalToggleText: {
+    color: "#c7d3ea",
+    fontSize: 12,
+    fontWeight: "600"
+  },
+  goalToggleTextActive: {
+    color: "#2ad68d"
+  },
+  chartHeader: {
+    gap: 4
+  },
+  chartTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#e5eefb"
+  },
+  chartSubtitle: {
+    fontSize: 11,
+    color: "#8fa0ba"
   }
 });

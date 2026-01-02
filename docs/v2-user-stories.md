@@ -551,7 +551,57 @@ Implementation notes:
 - API endpoints `/profile` + `/debts` store age and debts.
 - Web + Mobile Debts screens show form, preview metrics, list, edit, and delete actions.
 
+## Epic 10 - MyGoals (FIRE)
+
+### US-10.1 Manage goals (sheets)
+As a user, I want to create, rename, and delete goal sheets (default FIRE included) so I can model different scenarios.
+Acceptance criteria:
+- Default FIRE sheet exists and cannot be deleted.
+- Users can create and rename goal sheets.
+- Users can delete non-default sheets.
+Status: Implemented.
+Implementation notes:
+- API endpoints `/goals` (list/create/update/delete).
+- Web + Mobile tabs for goal sheets with add/rename/delete actions.
+
+### US-10.2 Configure goal inputs
+As a user, I want to enter goal inputs (dates, rates, desired monthly income, etc.) so the system can compute projections.
+Acceptance criteria:
+- Inputs stored per goal sheet.
+- Return method can be switched between CAGR and XIRR.
+- Inputs split into two sections:
+- Portfolio FIRE (real contribution history, ECB 10-year inflation).
+- FIRE Simulation Playground (desired monthly amount + custom inflation).
+- Web layout shows Portfolio FIRE and Simulation Playground side-by-side (stacked on mobile), each with Inputs/Results cards and a 4-line projection chart (continued contributions, no-contrib after Coast FIRE, Coast FIRE number, FIRE number). ECB inflation is editable per goal.
+Status: Implemented.
+Implementation notes:
+- API endpoint `/goals/{goal_id}/inputs` stores and validates inputs.
+- Web + Mobile input forms include separate Portfolio vs Simulation blocks.
+- Portfolio inflation uses `ECB_INFLATION_10Y` (env) with fallback to input if missing.
+- Simulation inputs include desired monthly amount (income target) and planned monthly contribution, plus value invested (editable), duration, expected portfolio gains, withdrawal rate, initial investment, return method, and inflation; numeric inputs accept `,` or `.` as decimal separators.
+
+### US-10.3 Contributions log
+As a user, I want to record monthly contributions so averages and projections are accurate.
+Acceptance criteria:
+- Add and delete contributions per goal.
+- Average monthly contribution calculated as the mean of contribution amounts.
+Status: Implemented.
+Implementation notes:
+- API endpoints `/goals/{goal_id}/contributions` for add/delete.
+- Web + Mobile contribution form + history list.
+
+### US-10.4 FIRE calculations and projections
+As a user, I want to see calculated FIRE targets, Coast FIRE timing, and projections.
+Acceptance criteria:
+- Summary metrics include years elapsed/remaining, invested total, and return rate.
+- FIRE target and Coast/FIRE timing shown with status labels.
+- Projection charts rendered for Portfolio FIRE and Simulation Playground.
+Status: Implemented.
+Implementation notes:
+- API computes goal summary and projection series (`_goal_summary`) for portfolio and simulation sections.
+- Web + Mobile render two charts and two metric panels from API.
+- XIRR uses negative contribution flows plus the goal "value invested" as the final cashflow.
+
 ## Future sections (WIP)
 - Stocks
-- MyGoals
 - Portfolio Management

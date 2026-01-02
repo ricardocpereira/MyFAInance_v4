@@ -209,6 +209,265 @@
   font-size: 12px;
 }
 
+.goals-page {
+  display: grid;
+  gap: 18px;
+}
+
+.goals-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.goals-header h2 {
+  margin: 0;
+}
+
+.goals-header p {
+  margin: 4px 0 0;
+  color: #9aa9bf;
+  font-size: 12px;
+}
+
+.goals-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.goals-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.goal-tab {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 14, 28, 0.6);
+  color: #cfe1ff;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.goal-tab.active {
+  background: #2ad68d;
+  color: #052016;
+  border-color: transparent;
+  font-weight: 700;
+}
+
+.goal-input {
+  background: rgba(8, 14, 28, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: #e5eefb;
+  min-width: 200px;
+}
+
+.goal-header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.goals-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.goals-sections {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+}
+
+.goals-section {
+  display: grid;
+  gap: 16px;
+}
+
+.goals-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.goals-section-header h4 {
+  margin: 0;
+}
+
+.goals-card {
+  background: rgba(10, 18, 36, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.goals-card h4 {
+  margin: 0;
+}
+
+.goals-card h5 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.goal-readonly {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  background: rgba(8, 14, 28, 0.6);
+  color: #e5eefb;
+  font-size: 12px;
+}
+
+.goals-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.goals-metric {
+  background: rgba(7, 12, 24, 0.65);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #9aa9bf;
+}
+
+.goals-metric strong {
+  color: #e6f0ff;
+  font-size: 14px;
+}
+
+.goals-chart {
+  background: rgba(10, 18, 36, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.goals-chart-body {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.goals-chart-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #8ea0bd;
+  min-height: 220px;
+}
+
+.goals-chart-axis .axis-label {
+  margin-top: 6px;
+  font-size: 10px;
+  color: #6f7f96;
+}
+
+.goals-chart-plot {
+  display: grid;
+}
+
+.goals-chart svg {
+  width: 100%;
+  height: 220px;
+  border-radius: 12px;
+  background: rgba(6, 10, 22, 0.8);
+}
+
+.goals-chart-x {
+  display: flex;
+  justify-content: space-between;
+  margin-left: 90px;
+  font-size: 11px;
+  color: #8ea0bd;
+}
+
+.goals-chart-axis-label {
+  margin: 0 0 0 90px;
+  font-size: 11px;
+  color: #6f7f96;
+}
+
+.readonly-input {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.goals-chart-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #9aa9bf;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-item::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #9aa9bf;
+}
+
+.legend-item.legend-continued::before {
+  background: #9aa9bf;
+}
+
+.legend-item.legend-coast::before {
+  background: #2ad68d;
+}
+
+.legend-item.legend-target::before {
+  background: #4ea1ff;
+}
+
+.legend-item.legend-fire::before {
+  background: #ff6b6b;
+}
+
+.goals-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.goals-table th,
+.goals-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: left;
+}
+
 .login-topbar {
   display: flex;
   align-items: center;

@@ -519,6 +519,108 @@ export const translations = {
         actions: "Actions"
       }
     },
+    goals: {
+      title: "MyGoals",
+      subtitle: "Plan your FIRE journey and long-term goals.",
+      add: "Add goal",
+      newGoalPlaceholder: "New goal name",
+      detailsTitle: "Goal details",
+      detailsSubtitle: "Adjust inputs and contributions.",
+      loading: "Loading goals...",
+      loadError: "Unable to load goals.",
+      saveError: "Unable to save goal.",
+      deleteError: "Unable to delete goal.",
+      nameRequired: "Goal name is required.",
+      created: "Goal created.",
+      updated: "Goal updated.",
+      deleted: "Goal deleted.",
+      rename: "Rename",
+      delete: "Delete",
+      deleteConfirm: "Delete this goal and all its data? This cannot be undone.",
+      inputsTitle: "Inputs",
+      resultsTitle: "Results",
+      saveInputs: "Save inputs",
+      inputError: "Fill all inputs before saving.",
+      sections: {
+        portfolio: {
+          title: "Portfolio FIRE",
+          subtitle: "Based on your real contribution history.",
+          inputs: "Portfolio inputs",
+          results: "Portfolio results",
+          chartTitle: "Portfolio FIRE projection",
+          chartSubtitle: "Projection using average contributions and ECB inflation."
+        },
+        simulation: {
+          title: "FIRE Simulation Playground",
+          subtitle: "Adjust assumptions to explore scenarios.",
+          inputs: "Simulation inputs",
+          results: "Simulation results",
+          chartTitle: "Simulation projection",
+          chartSubtitle: "Projection based on your desired monthly amount."
+        }
+      },
+        inputs: {
+          startDate: "Start date",
+          durationYears: "Duration (years)",
+          sp500: "Expected portfolio % gains",
+          desiredMonthly: "Desired monthly amount",
+          plannedMonthly: "Planned monthly contribution",
+          withdrawalRate: "Safe withdrawal rate (%)",
+          initialInvestment: "Initial investment",
+          valueInvested: "Value invested",
+          inflation: "Expected inflation (%)",
+          ecbInflation: "ECB inflation (10Y avg)",
+          returnMethod: "Return method"
+        },
+        metrics: {
+        yearsElapsed: "Years elapsed",
+        yearsRemaining: "Years remaining",
+        avgMonthly: "Avg monthly contributions",
+        avgMonthlyPortfolio: "Avg contribution amount",
+        avgMonthlySimulation: "Planned monthly contribution",
+        investedTotal: "Value invested",
+        returnRate: "Annual return",
+        returnCalc: "XIRR/CAGR result",
+        future1000: "Future value of 1000",
+        fireTarget: "FIRE target",
+          coastTarget: "Coast FIRE number",
+          coastTime: "Years to Coast FIRE",
+          fireTime: "Time to FIRE",
+          years: "years"
+        },
+      status: {
+        missing: "Missing target",
+        impossible: "Impossible",
+        achieved: "FIRE achieved"
+      },
+      fireMessage: "FIRE in {years} years and {months} months",
+      tooltips: {
+        returnRate:
+          "Annualized return based on contributions and current value (XIRR or CAGR)."
+      },
+        chart: {
+          title: "FIRE projection",
+          subtitle: "Capital growth and FIRE targets.",
+          continuedContrib: "Net worth with continued contributions",
+          noContribAfterCoast: "Net worth with no contributions after Coast FIRE milestone",
+          coastTarget: "Coast FIRE number",
+          fireLine: "FIRE number",
+          axisValue: "Value ({currency})",
+          axisYears: "Years",
+          empty: "No projection data yet."
+        },
+      contributions: {
+        title: "Contributions",
+        listTitle: "Contribution history",
+        date: "Date",
+        amount: "Amount",
+        add: "Add contribution",
+        actions: "Actions",
+        delete: "Delete",
+        empty: "No contributions yet.",
+        error: "Contribution data missing."
+      }
+    },
     summary: {
       value: "Portfolio current value",
       investedLabel: "invested",
@@ -1196,6 +1298,108 @@ export const translations = {
         actions: "Acoes"
       }
     },
+    goals: {
+      title: "MyGoals",
+      subtitle: "Planeie o FIRE e os seus objetivos financeiros.",
+      add: "Adicionar objetivo",
+      newGoalPlaceholder: "Nome do objetivo",
+      detailsTitle: "Detalhes do objetivo",
+      detailsSubtitle: "Ajuste os inputs e os aportes.",
+      loading: "A carregar objetivos...",
+      loadError: "Nao foi possivel carregar objetivos.",
+      saveError: "Nao foi possivel guardar objetivo.",
+      deleteError: "Nao foi possivel eliminar objetivo.",
+      nameRequired: "O nome do objetivo e obrigatorio.",
+      created: "Objetivo criado.",
+      updated: "Objetivo atualizado.",
+      deleted: "Objetivo eliminado.",
+      rename: "Renomear",
+      delete: "Eliminar",
+      deleteConfirm: "Eliminar este objetivo e todos os dados? Nao pode ser revertido.",
+      inputsTitle: "Inputs",
+      resultsTitle: "Resultados",
+      saveInputs: "Guardar inputs",
+      inputError: "Preencha todos os campos antes de guardar.",
+      sections: {
+        portfolio: {
+          title: "Portfolio FIRE",
+          subtitle: "Baseado no historico real de aportes.",
+          inputs: "Inputs do portfolio",
+          results: "Resultados do portfolio",
+          chartTitle: "Projecao Portfolio FIRE",
+          chartSubtitle: "Projecao com media de aportes e inflacao BCE."
+        },
+        simulation: {
+          title: "FIRE Simulation Playground",
+          subtitle: "Ajuste pressupostos para simular cenarios.",
+          inputs: "Inputs de simulacao",
+          results: "Resultados da simulacao",
+          chartTitle: "Projecao simulada",
+          chartSubtitle: "Projecao baseada no valor mensal desejado."
+        }
+      },
+        inputs: {
+          startDate: "Data de inicio",
+          durationYears: "Duracao (anos)",
+          sp500: "Ganho esperado do portfolio (%)",
+          desiredMonthly: "Valor mensal desejado",
+          plannedMonthly: "Aporte mensal planeado",
+          withdrawalRate: "Taxa de levantamento seguro (%)",
+          initialInvestment: "Investimento inicial",
+          valueInvested: "Valor investido",
+          inflation: "Inflacao esperada (%)",
+          ecbInflation: "Inflacao BCE (media 10 anos)",
+          returnMethod: "Metodo de rentabilidade"
+        },
+        metrics: {
+        yearsElapsed: "Anos decorridos",
+        yearsRemaining: "Anos em falta",
+        avgMonthly: "Media mensal de aportes",
+        avgMonthlyPortfolio: "Media dos aportes",
+        avgMonthlySimulation: "Aporte mensal planeado",
+        investedTotal: "Valor investido",
+        returnRate: "Rentabilidade anual",
+        returnCalc: "Resultado XIRR/CAGR",
+        future1000: "Valor futuro de 1000",
+        fireTarget: "Patrimonio FIRE",
+          coastTarget: "Numero Coast FIRE",
+          coastTime: "Anos ate Coast FIRE",
+          fireTime: "Tempo ate FIRE",
+          years: "anos"
+        },
+      status: {
+        missing: "Meta em falta",
+        impossible: "Impossivel",
+        achieved: "FIRE atingido"
+      },
+      fireMessage: "FIRE em {years} anos e {months} meses",
+      tooltips: {
+        returnRate:
+          "Rentabilidade anualizada com base nos aportes e valor atual (XIRR ou CAGR)."
+      },
+        chart: {
+          title: "Projecao FIRE",
+          subtitle: "Evolucao do capital e metas FIRE.",
+          continuedContrib: "Patrimonio com aportes continuados",
+          noContribAfterCoast: "Patrimonio sem aportes apos Coast FIRE",
+          coastTarget: "Numero Coast FIRE",
+          fireLine: "Numero FIRE",
+          axisValue: "Valor ({currency})",
+          axisYears: "Anos",
+          empty: "Sem dados de projecao."
+        },
+      contributions: {
+        title: "Aportes",
+        listTitle: "Historico de aportes",
+        date: "Data",
+        amount: "Montante",
+        add: "Adicionar aporte",
+        actions: "Acoes",
+        delete: "Eliminar",
+        empty: "Sem aportes.",
+        error: "Dados de aportes em falta."
+      }
+    },
     summary: {
       value: "Valor atual do portfolio",
       investedLabel: "investido",
@@ -1871,6 +2075,108 @@ export const translations = {
         months: "Meses restantes",
         payoffAge: "Edad de pago",
         actions: "Acciones"
+      }
+    },
+    goals: {
+      title: "MyGoals",
+      subtitle: "Planifica tu FIRE y metas financieras.",
+      add: "Agregar objetivo",
+      newGoalPlaceholder: "Nombre del objetivo",
+      detailsTitle: "Detalles del objetivo",
+      detailsSubtitle: "Ajusta los inputs y aportes.",
+      loading: "Cargando objetivos...",
+      loadError: "No se pudieron cargar los objetivos.",
+      saveError: "No se pudo guardar el objetivo.",
+      deleteError: "No se pudo eliminar el objetivo.",
+      nameRequired: "El nombre del objetivo es obligatorio.",
+      created: "Objetivo creado.",
+      updated: "Objetivo actualizado.",
+      deleted: "Objetivo eliminado.",
+      rename: "Renombrar",
+      delete: "Eliminar",
+      deleteConfirm: "Eliminar este objetivo y todos los datos? No se puede deshacer.",
+      inputsTitle: "Inputs",
+      resultsTitle: "Resultados",
+      saveInputs: "Guardar inputs",
+      inputError: "Completa todos los campos antes de guardar.",
+      sections: {
+        portfolio: {
+          title: "Portfolio FIRE",
+          subtitle: "Basado en tu historial real de aportes.",
+          inputs: "Inputs del portfolio",
+          results: "Resultados del portfolio",
+          chartTitle: "Proyeccion Portfolio FIRE",
+          chartSubtitle: "Proyeccion con promedio de aportes e inflacion BCE."
+        },
+        simulation: {
+          title: "FIRE Simulation Playground",
+          subtitle: "Ajusta supuestos para simular escenarios.",
+          inputs: "Inputs de simulacion",
+          results: "Resultados de simulacion",
+          chartTitle: "Proyeccion simulada",
+          chartSubtitle: "Proyeccion basada en el valor mensual deseado."
+        }
+      },
+      inputs: {
+        startDate: "Fecha de inicio",
+        durationYears: "Duracion (anos)",
+        sp500: "Ganancia esperada del portfolio (%)",
+        desiredMonthly: "Valor mensual deseado",
+        plannedMonthly: "Aporte mensual planeado",
+        withdrawalRate: "Tasa de retiro segura (%)",
+        initialInvestment: "Inversion inicial",
+        valueInvested: "Valor invertido",
+        inflation: "Inflacion esperada (%)",
+        ecbInflation: "Inflacion BCE (promedio 10 anos)",
+        returnMethod: "Metodo de rentabilidad"
+      },
+      metrics: {
+        yearsElapsed: "Anos transcurridos",
+        yearsRemaining: "Anos restantes",
+        avgMonthly: "Media mensual de aportes",
+        avgMonthlyPortfolio: "Promedio de aportes",
+        avgMonthlySimulation: "Aporte mensual planeado",
+        investedTotal: "Valor invertido",
+        returnRate: "Rentabilidad anual",
+        returnCalc: "Resultado XIRR/CAGR",
+        future1000: "Valor futuro de 1000",
+        fireTarget: "Meta FIRE",
+        coastTarget: "Numero Coast FIRE",
+        coastTime: "Anos hasta Coast FIRE",
+        fireTime: "Tiempo hasta FIRE",
+        years: "anos"
+      },
+      status: {
+        missing: "Meta pendiente",
+        impossible: "Imposible",
+        achieved: "FIRE logrado"
+      },
+      fireMessage: "FIRE en {years} anos y {months} meses",
+      tooltips: {
+        returnRate:
+          "Rentabilidad anualizada segun aportes y valor actual (XIRR o CAGR)."
+      },
+        chart: {
+          title: "Proyeccion FIRE",
+          subtitle: "Evolucion del capital y metas FIRE.",
+          continuedContrib: "Patrimonio con aportes continuados",
+          noContribAfterCoast: "Patrimonio sin aportes despues del Coast FIRE",
+          coastTarget: "Numero Coast FIRE",
+          fireLine: "Numero FIRE",
+          axisValue: "Valor ({currency})",
+          axisYears: "Anos",
+          empty: "Sin datos de proyeccion."
+        },
+      contributions: {
+        title: "Aportes",
+        listTitle: "Historial de aportes",
+        date: "Fecha",
+        amount: "Monto",
+        add: "Agregar aporte",
+        actions: "Acciones",
+        delete: "Eliminar",
+        empty: "Sin aportes.",
+        error: "Faltan datos de aportes."
       }
     },
     summary: {

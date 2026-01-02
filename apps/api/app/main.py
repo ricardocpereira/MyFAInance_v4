@@ -2,6 +2,7 @@ import csv
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import secrets
@@ -14,7 +15,7 @@ import pdfplumber
 import urllib.parse
 import urllib.request
 from io import BytesIO
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from email.message import EmailMessage
 from contextlib import contextmanager
 
@@ -344,6 +345,32 @@ class DebtRequest(BaseModel):
     monthly_payment: float
 
 
+class GoalCreateRequest(BaseModel):
+    name: str
+
+
+class GoalUpdateRequest(BaseModel):
+    name: str
+
+
+class GoalInputRequest(BaseModel):
+    start_date: str | None = None
+    duration_years: float | None = None
+    sp500_return: float | None = None
+    desired_monthly: float | None = None
+    planned_monthly: float | None = None
+    withdrawal_rate: float | None = None
+    initial_investment: float | None = None
+    inflation_rate: float | None = None
+    portfolio_inflation_rate: float | None = None
+    return_method: str | None = None
+
+
+class GoalContributionRequest(BaseModel):
+    contribution_date: str
+    amount: float
+
+
 class CategoryRemoveRequest(BaseModel):
     category: str
     clear_data: bool = False
@@ -424,6 +451,36 @@ def _init_db() -> None:
                 monthly_payment REAL NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS goals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_email TEXT NOT NULL,
+                name TEXT NOT NULL,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(owner_email, name)
+            );
+            CREATE TABLE IF NOT EXISTS goal_inputs (
+                goal_id INTEGER PRIMARY KEY,
+                start_date TEXT NOT NULL,
+                duration_years REAL NOT NULL,
+                sp500_return REAL NOT NULL,
+                desired_monthly REAL NOT NULL,
+                planned_monthly REAL NOT NULL,
+                withdrawal_rate REAL NOT NULL,
+                initial_investment REAL NOT NULL,
+                inflation_rate REAL NOT NULL,
+                portfolio_inflation_rate REAL,
+                return_method TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS goal_contributions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                goal_id INTEGER NOT NULL,
+                contribution_date TEXT NOT NULL,
+                amount REAL NOT NULL,
+                created_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS santander_imports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -695,6 +752,15 @@ def _init_db() -> None:
             );
             """
         )
+        columns = conn.execute("PRAGMA table_info(goal_inputs)").fetchall()
+        column_names = {row["name"] for row in columns}
+        if "portfolio_inflation_rate" not in column_names:
+            conn.execute("ALTER TABLE goal_inputs ADD COLUMN portfolio_inflation_rate REAL")
+        if "planned_monthly" not in column_names:
+            conn.execute("ALTER TABLE goal_inputs ADD COLUMN planned_monthly REAL")
+            conn.execute(
+                "UPDATE goal_inputs SET planned_monthly = desired_monthly WHERE planned_monthly IS NULL"
+            )
         columns = [
             row["name"]
             for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
@@ -938,6 +1004,826 @@ def _delete_debt(email: str, debt_id: int) -> bool:
             return False
         conn.execute("DELETE FROM debts WHERE id = ?", (debt_id,))
     return True
+
+
+def _goal_default_inputs() -> dict:
+    default_ecb = _ecb_inflation_10y_avg() or 0.03
+    return {
+        "start_date": date.today().isoformat(),
+        "duration_years": 30.0,
+        "sp500_return": 0.1056,
+        "desired_monthly": 1000.0,
+        "planned_monthly": 1000.0,
+        "withdrawal_rate": 0.04,
+        "initial_investment": 0.0,
+        "inflation_rate": 0.03,
+        "portfolio_inflation_rate": default_ecb,
+        "return_method": "cagr",
+    }
+
+
+def _normalize_rate(value: float | None) -> float | None:
+    if value is None:
+        return None
+    if value > 1:
+        return value / 100
+    return value
+
+
+def _ecb_inflation_10y_avg() -> float | None:
+    raw = os.getenv("ECB_INFLATION_10Y", "").strip()
+    if not raw:
+        return None
+    try:
+        value = float(raw.replace(",", "."))
+    except ValueError:
+        return None
+    if value > 1:
+        value = value / 100
+    if value < 0:
+        return None
+    return value
+
+
+def _parse_iso_date(value: str) -> date:
+    try:
+        return datetime.fromisoformat(value).date()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid date format.") from exc
+
+
+def _ensure_default_goal(email: str) -> None:
+    with _db_connection() as conn:
+        columns = conn.execute("PRAGMA table_info(goal_inputs)").fetchall()
+        column_names = {row["name"] for row in columns}
+        if "portfolio_inflation_rate" not in column_names:
+            conn.execute("ALTER TABLE goal_inputs ADD COLUMN portfolio_inflation_rate REAL")
+        row = conn.execute(
+            "SELECT id FROM goals WHERE owner_email = ? AND is_default = 1",
+            (email,),
+        ).fetchone()
+        if row:
+            return
+        now = datetime.utcnow().isoformat()
+        conn.execute(
+            """
+            INSERT INTO goals (owner_email, name, is_default, created_at, updated_at)
+            VALUES (?, ?, 1, ?, ?)
+            """,
+            (email, "FIRE", now, now),
+        )
+        goal_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        defaults = _goal_default_inputs()
+        conn.execute(
+            """
+            INSERT INTO goal_inputs (
+                goal_id,
+                start_date,
+                duration_years,
+                sp500_return,
+                desired_monthly,
+                planned_monthly,
+                withdrawal_rate,
+                initial_investment,
+                inflation_rate,
+                portfolio_inflation_rate,
+                return_method,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                goal_id,
+                defaults["start_date"],
+                defaults["duration_years"],
+                defaults["sp500_return"],
+                defaults["desired_monthly"],
+                defaults["planned_monthly"],
+                defaults["withdrawal_rate"],
+                defaults["initial_investment"],
+                defaults["inflation_rate"],
+                defaults["portfolio_inflation_rate"],
+                defaults["return_method"],
+                now,
+            ),
+        )
+
+
+def _get_goal(goal_id: int, email: str) -> sqlite3.Row | None:
+    with _db_connection() as conn:
+        return conn.execute(
+            """
+            SELECT id, name, is_default, created_at, updated_at
+            FROM goals
+            WHERE id = ? AND owner_email = ?
+            """,
+            (goal_id, email),
+        ).fetchone()
+
+
+def _list_goals(email: str) -> list[dict]:
+    _ensure_default_goal(email)
+    with _db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, name, is_default, created_at, updated_at
+            FROM goals
+            WHERE owner_email = ?
+            ORDER BY is_default DESC, created_at ASC
+            """,
+            (email,),
+        ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "name": row["name"],
+            "is_default": bool(row["is_default"]),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+        for row in rows
+    ]
+
+
+def _create_goal(email: str, name: str) -> dict:
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        exists = conn.execute(
+            "SELECT id FROM goals WHERE owner_email = ? AND name = ?",
+            (email, name),
+        ).fetchone()
+        if exists:
+            raise HTTPException(status_code=400, detail="Goal name already exists.")
+        columns = conn.execute("PRAGMA table_info(goal_inputs)").fetchall()
+        column_names = {row["name"] for row in columns}
+        if "portfolio_inflation_rate" not in column_names:
+            conn.execute("ALTER TABLE goal_inputs ADD COLUMN portfolio_inflation_rate REAL")
+        conn.execute(
+            """
+            INSERT INTO goals (owner_email, name, is_default, created_at, updated_at)
+            VALUES (?, ?, 0, ?, ?)
+            """,
+            (email, name, now, now),
+        )
+        goal_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        defaults = _goal_default_inputs()
+        conn.execute(
+            """
+            INSERT INTO goal_inputs (
+                goal_id,
+                start_date,
+                duration_years,
+                sp500_return,
+                desired_monthly,
+                planned_monthly,
+                withdrawal_rate,
+                initial_investment,
+                inflation_rate,
+                portfolio_inflation_rate,
+                return_method,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                goal_id,
+                defaults["start_date"],
+                defaults["duration_years"],
+                defaults["sp500_return"],
+                defaults["desired_monthly"],
+                defaults["planned_monthly"],
+                defaults["withdrawal_rate"],
+                defaults["initial_investment"],
+                defaults["inflation_rate"],
+                defaults["portfolio_inflation_rate"],
+                defaults["return_method"],
+                now,
+            ),
+        )
+    return _get_goal(int(goal_id), email)
+
+
+def _update_goal_name(email: str, goal_id: int, name: str) -> dict | None:
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        row = conn.execute(
+            "SELECT id FROM goals WHERE id = ? AND owner_email = ?",
+            (goal_id, email),
+        ).fetchone()
+        if not row:
+            return None
+        exists = conn.execute(
+            "SELECT id FROM goals WHERE owner_email = ? AND name = ? AND id != ?",
+            (email, name, goal_id),
+        ).fetchone()
+        if exists:
+            raise HTTPException(status_code=400, detail="Goal name already exists.")
+        conn.execute(
+            "UPDATE goals SET name = ?, updated_at = ? WHERE id = ? AND owner_email = ?",
+            (name, now, goal_id, email),
+        )
+    return _get_goal(goal_id, email)
+
+
+def _delete_goal(email: str, goal_id: int) -> bool:
+    with _db_connection() as conn:
+        row = conn.execute(
+            "SELECT id, is_default FROM goals WHERE id = ? AND owner_email = ?",
+            (goal_id, email),
+        ).fetchone()
+        if not row:
+            return False
+        if row["is_default"]:
+            raise HTTPException(status_code=400, detail="Default goal cannot be deleted.")
+        conn.execute("DELETE FROM goal_contributions WHERE goal_id = ?", (goal_id,))
+        conn.execute("DELETE FROM goal_inputs WHERE goal_id = ?", (goal_id,))
+        conn.execute("DELETE FROM goals WHERE id = ?", (goal_id,))
+    return True
+
+
+def _get_goal_inputs(goal_id: int) -> dict:
+    defaults = _goal_default_inputs()
+    with _db_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT start_date, duration_years, sp500_return, desired_monthly, planned_monthly,
+                   withdrawal_rate, initial_investment, inflation_rate,
+                   portfolio_inflation_rate, return_method, updated_at
+            FROM goal_inputs
+            WHERE goal_id = ?
+            """,
+            (goal_id,),
+        ).fetchone()
+        if not row:
+            now = datetime.utcnow().isoformat()
+            conn.execute(
+                """
+                INSERT INTO goal_inputs (
+                    goal_id,
+                    start_date,
+                    duration_years,
+                    sp500_return,
+                    desired_monthly,
+                    planned_monthly,
+                    withdrawal_rate,
+                    initial_investment,
+                    inflation_rate,
+                    portfolio_inflation_rate,
+                    return_method,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    goal_id,
+                    defaults["start_date"],
+                    defaults["duration_years"],
+                    defaults["sp500_return"],
+                    defaults["desired_monthly"],
+                    defaults["planned_monthly"],
+                    defaults["withdrawal_rate"],
+                    defaults["initial_investment"],
+                    defaults["inflation_rate"],
+                    defaults["portfolio_inflation_rate"],
+                    defaults["return_method"],
+                    now,
+                ),
+            )
+            return {**defaults, "updated_at": now}
+    return {
+        "start_date": row["start_date"],
+        "duration_years": float(row["duration_years"]),
+        "sp500_return": float(row["sp500_return"]),
+        "desired_monthly": float(row["desired_monthly"]),
+        "planned_monthly": (
+            float(row["planned_monthly"])
+            if row["planned_monthly"] is not None
+            else defaults["planned_monthly"]
+        ),
+        "withdrawal_rate": float(row["withdrawal_rate"]),
+        "initial_investment": float(row["initial_investment"]),
+        "inflation_rate": float(row["inflation_rate"]),
+        "portfolio_inflation_rate": (
+            float(row["portfolio_inflation_rate"])
+            if row["portfolio_inflation_rate"] is not None
+            else defaults["portfolio_inflation_rate"]
+        ),
+        "return_method": row["return_method"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _update_goal_inputs(goal_id: int, payload: GoalInputRequest) -> dict:
+    current = _get_goal_inputs(goal_id)
+    start_date = payload.start_date or current["start_date"]
+    duration_years = payload.duration_years if payload.duration_years is not None else current["duration_years"]
+    sp500_return = _normalize_rate(
+        payload.sp500_return if payload.sp500_return is not None else current["sp500_return"]
+    )
+    desired_monthly = payload.desired_monthly if payload.desired_monthly is not None else current["desired_monthly"]
+    planned_monthly = (
+        payload.planned_monthly
+        if payload.planned_monthly is not None
+        else current["planned_monthly"]
+    )
+    withdrawal_rate = _normalize_rate(
+        payload.withdrawal_rate if payload.withdrawal_rate is not None else current["withdrawal_rate"]
+    )
+    initial_investment = (
+        payload.initial_investment
+        if payload.initial_investment is not None
+        else current["initial_investment"]
+    )
+    inflation_rate = _normalize_rate(
+        payload.inflation_rate if payload.inflation_rate is not None else current["inflation_rate"]
+    )
+    portfolio_inflation_rate = _normalize_rate(
+        payload.portfolio_inflation_rate
+        if payload.portfolio_inflation_rate is not None
+        else current["portfolio_inflation_rate"]
+    )
+    return_method = (payload.return_method or current["return_method"]).lower()
+    if return_method not in {"xirr", "cagr"}:
+        return_method = "cagr"
+    if duration_years <= 0:
+        raise HTTPException(status_code=400, detail="Duration must be greater than 0.")
+    if withdrawal_rate is not None and withdrawal_rate <= 0:
+        raise HTTPException(status_code=400, detail="Withdrawal rate must be greater than 0.")
+    if desired_monthly < 0:
+        raise HTTPException(status_code=400, detail="Desired monthly must be zero or greater.")
+    if planned_monthly < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Planned monthly contribution must be zero or greater."
+        )
+    if initial_investment < 0:
+        raise HTTPException(status_code=400, detail="Initial investment cannot be negative.")
+    if sp500_return is None or sp500_return < -0.99:
+        raise HTTPException(status_code=400, detail="Return rate must be greater than -99%.")
+    if inflation_rate is None or inflation_rate < -0.99:
+        raise HTTPException(status_code=400, detail="Inflation rate must be greater than -99%.")
+    if portfolio_inflation_rate is None or portfolio_inflation_rate < -0.99:
+        raise HTTPException(
+            status_code=400, detail="Portfolio inflation rate must be greater than -99%."
+        )
+    _parse_iso_date(start_date)
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO goal_inputs (
+                goal_id,
+                start_date,
+                duration_years,
+                sp500_return,
+                desired_monthly,
+                planned_monthly,
+                withdrawal_rate,
+                initial_investment,
+                inflation_rate,
+                portfolio_inflation_rate,
+                return_method,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                goal_id,
+                start_date,
+                duration_years,
+                sp500_return,
+                desired_monthly,
+                planned_monthly,
+                withdrawal_rate,
+                initial_investment,
+                inflation_rate,
+                portfolio_inflation_rate,
+                return_method,
+                now,
+            ),
+        )
+    return _get_goal_inputs(goal_id)
+
+
+def _list_goal_contributions(goal_id: int) -> list[dict]:
+    with _db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, contribution_date, amount, created_at
+            FROM goal_contributions
+            WHERE goal_id = ?
+            ORDER BY contribution_date ASC, id ASC
+            """,
+            (goal_id,),
+        ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "contribution_date": row["contribution_date"],
+            "amount": float(row["amount"]),
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
+def _add_goal_contribution(goal_id: int, payload: GoalContributionRequest) -> dict:
+    if payload.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than 0.")
+    _parse_iso_date(payload.contribution_date)
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO goal_contributions (goal_id, contribution_date, amount, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (goal_id, payload.contribution_date, payload.amount, now),
+        )
+        contribution_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    return {
+        "id": contribution_id,
+        "contribution_date": payload.contribution_date,
+        "amount": payload.amount,
+        "created_at": now,
+    }
+
+
+def _delete_goal_contribution(goal_id: int, contribution_id: int) -> bool:
+    with _db_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT id
+            FROM goal_contributions
+            WHERE id = ? AND goal_id = ?
+            """,
+            (contribution_id, goal_id),
+        ).fetchone()
+        if not row:
+            return False
+        conn.execute(
+            "DELETE FROM goal_contributions WHERE id = ? AND goal_id = ?",
+            (contribution_id, goal_id),
+        )
+    return True
+
+
+def _goal_months_elapsed(start_date: date, now_date: date) -> int:
+    if now_date <= start_date:
+        return 0
+    return max(0, int((now_date - start_date).days / 30.4375))
+
+
+def _goal_years_elapsed(start_date: date, now_date: date) -> float:
+    if now_date <= start_date:
+        return 0.0
+    return (now_date - start_date).days / 365.25
+
+
+def _xirr(flows: list[tuple[date, float]], guess: float = 0.1) -> float | None:
+    if not flows:
+        return None
+    flows = sorted(flows, key=lambda item: item[0])
+    start_date = flows[0][0]
+    if all(amount >= 0 for _, amount in flows) or all(amount <= 0 for _, amount in flows):
+        return None
+
+    def npv(rate: float) -> float:
+        total = 0.0
+        for dt_value, amount in flows:
+            days = (dt_value - start_date).days / 365.25
+            total += amount / ((1 + rate) ** days)
+        return total
+
+    def d_npv(rate: float) -> float:
+        total = 0.0
+        for dt_value, amount in flows:
+            days = (dt_value - start_date).days / 365.25
+            total -= (days * amount) / ((1 + rate) ** (days + 1))
+        return total
+
+    rate = guess
+    for _ in range(50):
+        value = npv(rate)
+        deriv = d_npv(rate)
+        if abs(value) < 1e-6:
+            return rate
+        if deriv == 0:
+            break
+        rate_next = rate - value / deriv
+        if rate_next <= -0.9999 or math.isnan(rate_next) or math.isinf(rate_next):
+            break
+        rate = rate_next
+    return None
+
+
+def _nper(rate: float, payment: float, present: float, future: float) -> float | None:
+    if payment == 0 and rate == 0:
+        return None
+    if rate == 0:
+        return -((present + future) / payment)
+    top = payment - future * rate
+    bottom = payment + present * rate
+    if bottom == 0:
+        return None
+    ratio = top / bottom
+    if ratio <= 0:
+        return None
+    return math.log(ratio) / math.log(1 + rate)
+
+
+def _goal_projection_series(
+    invested_total: float,
+    avg_monthly: float,
+    annual_return: float,
+    duration_years: float,
+    coast_years: float | None,
+    fire_target: float | None,
+    discount_rate: float | None,
+) -> list[dict]:
+    if duration_years <= 0:
+        return []
+    annual_return = min(max(annual_return, -0.99), 1.0)
+    rm = (1 + annual_return) ** (1 / 12) - 1 if annual_return != 0 else 0
+    coast_rate = discount_rate if discount_rate is not None else annual_return
+    coast_rate = min(max(coast_rate, -0.99), 1.0)
+    points: list[dict] = []
+    coast_months = int(coast_years * 12) if coast_years is not None else None
+    value_at_coast = None
+    if coast_months is not None:
+        if rm == 0:
+            value_at_coast = invested_total + avg_monthly * coast_months
+        else:
+            value_at_coast = invested_total * (1 + rm) ** coast_months + avg_monthly * (
+                ((1 + rm) ** coast_months - 1) / rm
+            )
+    for year in range(int(duration_years) + 1):
+        months = year * 12
+        if rm == 0:
+            with_contrib = invested_total + avg_monthly * months
+        else:
+            with_contrib = invested_total * (1 + rm) ** months + avg_monthly * (
+                ((1 + rm) ** months - 1) / rm
+            )
+        without_contrib = None
+        if coast_months is not None and value_at_coast is not None:
+            if months <= coast_months:
+                without_contrib = with_contrib
+            else:
+                without_contrib = value_at_coast * (1 + rm) ** (months - coast_months)
+        coast_target = None
+        if fire_target is not None:
+            years_left = duration_years - year
+            if years_left < 0:
+                years_left = 0
+            if coast_rate <= -0.99:
+                coast_target = None
+            elif coast_rate == 0:
+                coast_target = fire_target
+            else:
+                coast_target = fire_target / ((1 + coast_rate) ** years_left)
+        points.append(
+            {
+                "year": year,
+                "with_contrib": with_contrib,
+                "without_contrib": without_contrib,
+                "coast_target": coast_target,
+            }
+        )
+    return points
+
+
+def _goal_summary(
+    email: str, goal_id: int, portfolio_id: int | None = None
+) -> dict:
+    inputs = _get_goal_inputs(goal_id)
+    start_date = _parse_iso_date(inputs["start_date"])
+    now_date = datetime.utcnow().date()
+    duration_years = float(inputs["duration_years"])
+    expected_return = float(inputs["sp500_return"])
+    desired_monthly = float(inputs["desired_monthly"])
+    planned_monthly_raw = inputs.get("planned_monthly")
+    planned_monthly = (
+        float(planned_monthly_raw)
+        if planned_monthly_raw is not None
+        else desired_monthly
+    )
+    withdrawal_rate = float(inputs["withdrawal_rate"])
+    initial_investment = float(inputs["initial_investment"])
+    inflation_rate = float(inputs["inflation_rate"])
+    portfolio_inflation_rate = float(
+        inputs.get("portfolio_inflation_rate") or inflation_rate
+    )
+    contributions = _list_goal_contributions(goal_id)
+    if contributions:
+        latest_contribution = max(
+            _parse_iso_date(item["contribution_date"]) for item in contributions
+        )
+        if latest_contribution <= now_date:
+            now_date = latest_contribution
+    total_contrib = sum(item["amount"] for item in contributions)
+    contrib_count = len(contributions)
+    invested_total = initial_investment + total_contrib
+    avg_contribution = total_contrib / contrib_count if contrib_count else 0.0
+    past_contributions = []
+    for item in contributions:
+        item_date = _parse_iso_date(item["contribution_date"])
+        if item_date <= now_date:
+            past_contributions.append(item)
+    past_total = sum(item["amount"] for item in past_contributions)
+    invested_total_to_date = initial_investment + past_total
+
+    current_value = invested_total
+    portfolio_summary = None
+    if portfolio_id is not None:
+        portfolio = _get_portfolio(portfolio_id, email)
+        if portfolio:
+            categories = _filter_categories(json.loads(portfolio["categories_json"]))
+            _ensure_category_settings(portfolio_id, categories)
+            settings = _get_category_settings(portfolio_id)
+            settings_lookup = {_normalize_text(key): value for key, value in settings.items()}
+            totals, _, _, investment_current_total, _ = _aggregate_latest_totals(
+                portfolio_id, settings_lookup
+            )
+            if totals:
+                portfolio_total = sum(totals.values())
+                if investment_current_total is not None and investment_current_total > 0:
+                    current_value = investment_current_total
+                else:
+                    current_value = portfolio_total
+                portfolio_summary = {
+                    "portfolio_total": portfolio_total,
+                    "investment_total": investment_current_total,
+                }
+
+    xirr_value = current_value
+    if initial_investment > 0:
+        xirr_value = initial_investment
+
+    years_elapsed = _goal_years_elapsed(start_date, now_date)
+    years_remaining = max(0.0, duration_years - years_elapsed)
+
+    rate_method = inputs.get("return_method", "cagr").lower()
+    return_rate = None
+    if rate_method == "xirr":
+        flows: list[tuple[date, float]] = []
+        for item in past_contributions:
+            flows.append((_parse_iso_date(item["contribution_date"]), -item["amount"]))
+        flows.append((now_date, xirr_value))
+        result = _xirr(flows)
+        if result is not None:
+            return_rate = result * 100
+    else:
+        if invested_total_to_date > 0 and current_value > 0 and years_elapsed > 0:
+            return_rate = (
+                (current_value / invested_total_to_date) ** (1 / years_elapsed) - 1
+            ) * 100
+
+    calc_return = expected_return
+    if return_rate is not None and math.isfinite(return_rate):
+        calc_return = return_rate / 100
+    if calc_return is None or not math.isfinite(calc_return) or calc_return <= -0.99:
+        calc_return = expected_return
+    if calc_return is None:
+        calc_return = expected_return
+    calc_return = min(max(calc_return, -0.99), 1.0)
+    expected_return = min(max(expected_return, -0.99), 1.0)
+    assumption_return = expected_return * 100
+
+    def build_section(
+        invested_base: float,
+        avg_monthly: float,
+        inflation_value: float,
+        discount_rate: float,
+        desired_monthly_value: float,
+        current_value_override: float,
+    ) -> dict:
+        discount_rate = min(max(discount_rate, -0.99), 1.0)
+        future_value_1000 = 1000 * ((1 + inflation_value) ** duration_years)
+        desired_future = desired_monthly_value * ((1 + inflation_value) ** duration_years)
+        fire_target = (
+            (desired_future * 12 / withdrawal_rate) if withdrawal_rate > 0 else None
+        )
+
+        coast_years = None
+        coast_status = "ok"
+        if fire_target is None:
+            coast_status = "missing"
+        else:
+            if invested_base >= fire_target:
+                coast_years = 0.0
+                coast_status = "achieved"
+            else:
+                rm = (1 + discount_rate) ** (1 / 12) - 1 if discount_rate != 0 else 0
+                t_months = int(duration_years * 12)
+                if t_months <= 0:
+                    coast_status = "imp"
+                else:
+                    found = None
+                    if rm == 0:
+                        for month in range(1, t_months + 1):
+                            balance = invested_base + avg_monthly * month
+                            value_future = balance
+                            if value_future >= fire_target:
+                                found = month
+                                break
+                    else:
+                        for month in range(1, t_months + 1):
+                            balance = invested_base * (1 + rm) ** month + avg_monthly * (
+                                ((1 + rm) ** month - 1) / rm
+                            )
+                            value_future = balance * (1 + rm) ** (t_months - month)
+                            if value_future >= fire_target:
+                                found = month
+                                break
+                    if found is not None:
+                        coast_years = found / 12
+                    else:
+                        coast_status = "imp"
+        if coast_years is not None and years_elapsed >= coast_years:
+            coast_status = "achieved"
+
+        fire_years = None
+        fire_months = None
+        fire_status = "ok"
+        if fire_target is None:
+            fire_status = "missing"
+        else:
+          rm = (1 + discount_rate) ** (1 / 12) - 1 if discount_rate != 0 else 0
+          months_to_fire = _nper(rm, -avg_monthly, -invested_base, fire_target)
+          if months_to_fire is None:
+              fire_status = "imp"
+          else:
+                fire_years = months_to_fire / 12
+                if fire_years > duration_years:
+                    fire_status = "imp"
+                else:
+                    years_int = int(fire_years)
+                    months_int = int(round((fire_years - years_int) * 12))
+                    fire_years = float(years_int)
+                    fire_months = months_int
+
+        projection = _goal_projection_series(
+            invested_base,
+            avg_monthly,
+            expected_return,
+            duration_years,
+            coast_years,
+            fire_target,
+            discount_rate,
+        )
+        coast_target_value = None
+        if projection:
+            coast_target_value = projection[0].get("coast_target")
+
+        return {
+            "metrics": {
+                "years_elapsed": years_elapsed,
+                "years_remaining": years_remaining,
+                "avg_monthly": avg_monthly,
+                "invested_total": invested_base,
+                "current_value": current_value_override,
+                "return_rate": return_rate,
+                "return_method": rate_method,
+                "assumption_return": assumption_return,
+                "future_value_1000": future_value_1000,
+                "fire_target": fire_target,
+                "coast_target": coast_target_value,
+                "coast_years": coast_years,
+                "coast_status": coast_status,
+                "fire_years": fire_years,
+                "fire_months": fire_months,
+                "fire_status": fire_status,
+                "inflation_rate": inflation_value,
+            },
+            "projection": projection,
+        }
+
+    inflation_portfolio = portfolio_inflation_rate or _ecb_inflation_10y_avg() or inflation_rate
+    portfolio_section = build_section(
+        invested_total,
+        avg_contribution,
+        inflation_portfolio,
+        calc_return,
+        desired_monthly,
+        current_value,
+    )
+    simulation_section = build_section(
+        initial_investment,
+        planned_monthly,
+        inflation_rate,
+        expected_return,
+        desired_monthly,
+        initial_investment,
+    )
+
+    return {
+        "inputs": inputs,
+        "contributions": contributions,
+        "portfolio": portfolio_summary,
+        "portfolio_fire": portfolio_section,
+        "simulation_fire": simulation_section,
+    }
 
 
 _init_db()
@@ -6423,6 +7309,109 @@ def delete_debt(debt_id: int, authorization: str | None = Header(default=None)) 
     session = _require_session(authorization)
     if not _delete_debt(session["email"], debt_id):
         raise HTTPException(status_code=404, detail="Debt not found.")
+    return {"status": "deleted"}
+
+
+@app.get("/goals")
+def list_goals(authorization: str | None = Header(default=None)) -> dict:
+    session = _require_session(authorization)
+    return {"items": _list_goals(session["email"])}
+
+
+@app.post("/goals")
+def create_goal(payload: GoalCreateRequest, authorization: str | None = Header(default=None)) -> dict:
+    session = _require_session(authorization)
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Goal name is required.")
+    goal = _create_goal(session["email"], name)
+    return {"status": "saved", "goal": goal}
+
+
+@app.put("/goals/{goal_id}")
+def update_goal(
+    goal_id: int,
+    payload: GoalUpdateRequest,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    session = _require_session(authorization)
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Goal name is required.")
+    goal = _update_goal_name(session["email"], goal_id, name)
+    if not goal:
+        raise HTTPException(status_code=404, detail="Goal not found.")
+    return {"status": "saved", "goal": goal}
+
+
+@app.delete("/goals/{goal_id}")
+def delete_goal(goal_id: int, authorization: str | None = Header(default=None)) -> dict:
+    session = _require_session(authorization)
+    if not _delete_goal(session["email"], goal_id):
+        raise HTTPException(status_code=404, detail="Goal not found.")
+    return {"status": "deleted"}
+
+
+@app.get("/goals/{goal_id}")
+def get_goal(
+    goal_id: int,
+    portfolio_id: int | None = None,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    session = _require_session(authorization)
+    goal = _get_goal(goal_id, session["email"])
+    if not goal:
+        raise HTTPException(status_code=404, detail="Goal not found.")
+    summary = _goal_summary(session["email"], goal_id, portfolio_id)
+    return {
+        "goal": {
+            "id": goal["id"],
+            "name": goal["name"],
+            "is_default": bool(goal["is_default"]),
+            "created_at": goal["created_at"],
+            "updated_at": goal["updated_at"],
+        },
+        **summary,
+    }
+
+
+@app.post("/goals/{goal_id}/inputs")
+def update_goal_inputs(
+    goal_id: int,
+    payload: GoalInputRequest,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    session = _require_session(authorization)
+    if not _get_goal(goal_id, session["email"]):
+        raise HTTPException(status_code=404, detail="Goal not found.")
+    inputs = _update_goal_inputs(goal_id, payload)
+    return {"status": "saved", "inputs": inputs}
+
+
+@app.post("/goals/{goal_id}/contributions")
+def add_goal_contribution(
+    goal_id: int,
+    payload: GoalContributionRequest,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    session = _require_session(authorization)
+    if not _get_goal(goal_id, session["email"]):
+        raise HTTPException(status_code=404, detail="Goal not found.")
+    item = _add_goal_contribution(goal_id, payload)
+    return {"status": "saved", "contribution": item}
+
+
+@app.delete("/goals/{goal_id}/contributions/{contribution_id}")
+def delete_goal_contribution(
+    goal_id: int,
+    contribution_id: int,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    session = _require_session(authorization)
+    if not _get_goal(goal_id, session["email"]):
+        raise HTTPException(status_code=404, detail="Goal not found.")
+    if not _delete_goal_contribution(goal_id, contribution_id):
+        raise HTTPException(status_code=404, detail="Contribution not found.")
     return {"status": "deleted"}
 
 
