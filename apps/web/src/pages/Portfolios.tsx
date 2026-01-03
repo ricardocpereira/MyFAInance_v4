@@ -985,7 +985,11 @@ function Portfolios({
       <section className="institution-breakdown">
         <div className="section-head">
           <h3>{t.breakdown.title}</h3>
-          <span className="total-gains">
+          <span
+            className={`total-gains ${
+              institutionTotalGains >= 0 ? "pos" : "neg"
+            }`.trim()}
+          >
             {t.breakdown.totalGains}: {formatCurrency(institutionTotalGains)}
           </span>
         </div>
@@ -1020,17 +1024,41 @@ function Portfolios({
                   <span>{row.institution}</span>
                 </span>
                 <span>{formatCurrency(row.total)}</span>
-                <span>
+                <span
+                  className={
+                    row.vs_last_month === null || row.vs_last_month === undefined
+                      ? ""
+                      : row.vs_last_month >= 0
+                      ? "pos"
+                      : "neg"
+                  }
+                >
                   {row.vs_last_month === null || row.vs_last_month === undefined
                     ? "--"
                     : formatSignedCurrency(row.vs_last_month)}
                 </span>
-                <span>
+                <span
+                  className={
+                    row.gains === null || row.gains === undefined
+                      ? ""
+                      : row.gains >= 0
+                      ? "pos"
+                      : "neg"
+                  }
+                >
                   {row.gains === null || row.gains === undefined
                     ? "--"
                     : formatSignedCurrency(row.gains)}
                 </span>
-                <span>
+                <span
+                  className={
+                    row.profit_percent === null || row.profit_percent === undefined
+                      ? ""
+                      : row.profit_percent >= 0
+                      ? "pos"
+                      : "neg"
+                  }
+                >
                   {row.profit_percent === null || row.profit_percent === undefined
                     ? "--"
                     : formatSignedPercent(row.profit_percent)}
@@ -1077,7 +1105,15 @@ function Portfolios({
             <div className="row" key={row.date}>
               <span>{row.date}</span>
               <span>{formatCurrency(row.total)}</span>
-              <span>
+              <span
+                className={
+                  row.change === null || row.change === undefined
+                    ? ""
+                    : row.change >= 0
+                    ? "pos"
+                    : "neg"
+                }
+              >
                 {row.change === null ? "--" : formatSignedCurrency(row.change)}
                 {row.changePercent === null || row.change === null
                   ? ""

@@ -14,7 +14,10 @@ import {
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
-import Svg, { G, Path, Circle } from "react-native-svg";
+import Svg, { G, Path, Circle, Line, Text as SvgText } from "react-native-svg";
+
+const BANKING_DEFAULT_CATEGORY = "Sem categoria";
+const BANKING_DEFAULT_SUBCATEGORY = "Sem subcategoria";
 
 export default function App() {
   const [mode, setMode] = useState("signin");
@@ -42,7 +45,7 @@ export default function App() {
   const [institutionDetailOpen, setInstitutionDetailOpen] = useState(false);
   const [institutionDetailLoading, setInstitutionDetailLoading] = useState(false);
   const [institutionDetailError, setInstitutionDetailError] = useState("");
-  const [homeTab, setHomeTab] = useState("portfolios");
+  const [homeTab, setHomeTab] = useState("cockpit");
   const [portfolioView, setPortfolioView] = useState("overview");
   const [localCategories, setLocalCategories] = useState([]);
   const [categoryInput, setCategoryInput] = useState("");
@@ -56,6 +59,56 @@ export default function App() {
   const [deletePortfolioMessage, setDeletePortfolioMessage] = useState("");
   const [deletePortfolioError, setDeletePortfolioError] = useState("");
   const [deletingPortfolio, setDeletingPortfolio] = useState(false);
+  const [debts, setDebts] = useState([]);
+  const [debtsLoading, setDebtsLoading] = useState(false);
+  const [debtsError, setDebtsError] = useState("");
+  const [debtsMessage, setDebtsMessage] = useState("");
+  const [debtName, setDebtName] = useState("");
+  const [debtOriginalAmount, setDebtOriginalAmount] = useState("");
+  const [debtCurrentBalance, setDebtCurrentBalance] = useState("");
+  const [debtMonthlyPayment, setDebtMonthlyPayment] = useState("");
+  const [debtEditingId, setDebtEditingId] = useState(null);
+  const [debtSaving, setDebtSaving] = useState(false);
+  const [profileAgeInput, setProfileAgeInput] = useState("");
+  const [profileAgeSaving, setProfileAgeSaving] = useState(false);
+  const [profileAgeMessage, setProfileAgeMessage] = useState("");
+  const [profileAgeError, setProfileAgeError] = useState("");
+  const [goals, setGoals] = useState([]);
+  const [goalsLoading, setGoalsLoading] = useState(false);
+  const [goalsError, setGoalsError] = useState("");
+  const [goalsMessage, setGoalsMessage] = useState("");
+  const [activeGoalId, setActiveGoalId] = useState(null);
+  const [goalInputs, setGoalInputs] = useState(null);
+  const [goalMetrics, setGoalMetrics] = useState(null);
+  const [goalProjection, setGoalProjection] = useState([]);
+  const [simulationMetrics, setSimulationMetrics] = useState(null);
+  const [simulationProjection, setSimulationProjection] = useState([]);
+  const [goalContributions, setGoalContributions] = useState([]);
+  const [goalNameInput, setGoalNameInput] = useState("");
+  const [goalRenameInput, setGoalRenameInput] = useState("");
+  const [goalViewMode, setGoalViewMode] = useState("portfolio");
+  const [goalForm, setGoalForm] = useState({
+    start_date: "",
+    duration_years: "",
+    sp500_return: "",
+    desired_monthly: "",
+    planned_monthly: "",
+    withdrawal_rate: "",
+    initial_investment: "",
+    inflation_rate: "",
+    portfolio_inflation_rate: "",
+    simulation_current_age: "",
+    simulation_retirement_age: "",
+    simulation_annual_spending: "",
+    simulation_current_assets: "",
+    simulation_monthly_contribution: "",
+    simulation_return_rate: "",
+    simulation_inflation_rate: "",
+    simulation_swr: "",
+    return_method: "cagr"
+  });
+  const [goalContributionDate, setGoalContributionDate] = useState("");
+  const [goalContributionAmount, setGoalContributionAmount] = useState("");
 
   const [santanderFile, setSantanderFile] = useState(null);
   const [santanderItems, setSantanderItems] = useState([]);
@@ -68,6 +121,7 @@ export default function App() {
   const [xtbFiles, setXtbFiles] = useState([]);
   const [xtbItems, setXtbItems] = useState([]);
   const [xtbHoldings, setXtbHoldings] = useState([]);
+  const [xtbOperations, setXtbOperations] = useState([]);
   const [xtbWarnings, setXtbWarnings] = useState([]);
   const [xtbImports, setXtbImports] = useState([]);
   const [xtbPreviewing, setXtbPreviewing] = useState(false);
@@ -136,6 +190,11 @@ export default function App() {
   const [holdingMetaSavingKey, setHoldingMetaSavingKey] = useState(null);
   const [holdingMetaMessage, setHoldingMetaMessage] = useState("");
   const [holdingMetaError, setHoldingMetaError] = useState("");
+  const [holdingTags, setHoldingTags] = useState([]);
+  const [holdingCustomTags, setHoldingCustomTags] = useState([]);
+  const [holdingTagInput, setHoldingTagInput] = useState("");
+  const [holdingTagMessage, setHoldingTagMessage] = useState("");
+  const [holdingTagError, setHoldingTagError] = useState("");
   const [holdingTicker, setHoldingTicker] = useState("");
   const [holdingCompany, setHoldingCompany] = useState("");
   const [holdingOperation, setHoldingOperation] = useState("buy");
@@ -149,6 +208,35 @@ export default function App() {
   const [holdingSaving, setHoldingSaving] = useState(false);
   const [holdingError, setHoldingError] = useState("");
   const [holdingMessage, setHoldingMessage] = useState("");
+  const [bankingInstitutions, setBankingInstitutions] = useState([]);
+  const [bankingCategories, setBankingCategories] = useState([]);
+  const [bankingTransactions, setBankingTransactions] = useState([]);
+  const [bankingLoading, setBankingLoading] = useState(false);
+  const [bankingError, setBankingError] = useState("");
+  const [bankingMessage, setBankingMessage] = useState("");
+  const [bankingFile, setBankingFile] = useState(null);
+  const [bankingPaste, setBankingPaste] = useState("");
+  const [bankingPreview, setBankingPreview] = useState(null);
+  const [bankingMapping, setBankingMapping] = useState([]);
+  const [bankingInstitutionInput, setBankingInstitutionInput] = useState("");
+  const [bankingInstitutionSelect, setBankingInstitutionSelect] = useState("");
+  const [bankingPreviewing, setBankingPreviewing] = useState(false);
+  const [bankingImporting, setBankingImporting] = useState(false);
+  const [bankingShowMapping, setBankingShowMapping] = useState(false);
+  const [bankingShowWarnings, setBankingShowWarnings] = useState(false);
+  const [bankingMonth, setBankingMonth] = useState("");
+  const [bankingCategory, setBankingCategory] = useState("");
+  const [bankingSubcategory, setBankingSubcategory] = useState("");
+  const [bankingInstitutionFilter, setBankingInstitutionFilter] = useState("");
+  const [bankingUpdatingId, setBankingUpdatingId] = useState(null);
+  const [bankingBudgets, setBankingBudgets] = useState([]);
+  const [bankingBudgetsLoading, setBankingBudgetsLoading] = useState(false);
+  const [bankingBudgetsError, setBankingBudgetsError] = useState("");
+  const [bankingBudgetMonth, setBankingBudgetMonth] = useState(
+    new Date().toISOString().slice(0, 7)
+  );
+  const [bankingBudgetCategory, setBankingBudgetCategory] = useState("");
+  const [bankingBudgetAmount, setBankingBudgetAmount] = useState("");
   const API_BASE = process.env.EXPO_PUBLIC_API_BASE || "http://10.0.2.2:8000";
   const institutionLogos = useMemo(
     () => ({
@@ -175,6 +263,66 @@ export default function App() {
     [portfolios, selectedPortfolioId]
   );
 
+  const bankingSummary = useMemo(() => {
+    let income = 0;
+    let expenses = 0;
+    const byCategory = {};
+    bankingTransactions.forEach((tx) => {
+      if (tx.amount >= 0) {
+        income += tx.amount;
+      } else {
+        const spend = Math.abs(tx.amount);
+        expenses += spend;
+        const key = tx.category || BANKING_DEFAULT_CATEGORY;
+        byCategory[key] = (byCategory[key] || 0) + spend;
+      }
+    });
+    const net = income - expenses;
+    const topCategory = Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0];
+    return {
+      income,
+      expenses,
+      net,
+      topCategory: topCategory ? topCategory[0] : "--"
+    };
+  }, [bankingTransactions]);
+
+  const bankingExpenseByCategory = useMemo(() => {
+    const totals = {};
+    bankingTransactions.forEach((tx) => {
+      if (tx.amount < 0) {
+        const key = tx.category || BANKING_DEFAULT_CATEGORY;
+        totals[key] = (totals[key] || 0) + Math.abs(tx.amount);
+      }
+    });
+    return Object.entries(totals)
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [bankingTransactions]);
+
+  const bankingMonthlyNet = useMemo(() => {
+    const totals = {};
+    bankingTransactions.forEach((tx) => {
+      const month = tx.tx_date ? String(tx.tx_date).slice(0, 7) : "Unknown";
+      if (!totals[month]) {
+        totals[month] = { income: 0, expenses: 0 };
+      }
+      if (tx.amount >= 0) {
+        totals[month].income += tx.amount;
+      } else {
+        totals[month].expenses += Math.abs(tx.amount);
+      }
+    });
+    return Object.entries(totals)
+      .map(([month, entry]) => ({
+        month,
+        net: entry.income - entry.expenses
+      }))
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .slice(-6);
+  }, [bankingTransactions]);
+
   useEffect(() => {
     setLocalCategories(activePortfolio?.categories || []);
     if (activePortfolio?.categories?.length) {
@@ -199,6 +347,18 @@ export default function App() {
     return `${currency} ${Number(value || 0).toFixed(2)}`;
   };
 
+  const formatAxisCurrency = (value) => {
+    const currency = activePortfolio?.currency || "EUR";
+    const absValue = Math.abs(value);
+    let shortValue = Number(value || 0).toFixed(0);
+    if (absValue >= 1_000_000) {
+      shortValue = `${(value / 1_000_000).toFixed(1)}M`;
+    } else if (absValue >= 1_000) {
+      shortValue = `${(value / 1_000).toFixed(0)}k`;
+    }
+    return `${currency} ${shortValue}`;
+  };
+
   const parseInputNumber = (value) => {
     if (!value) {
       return null;
@@ -208,15 +368,13 @@ export default function App() {
       return null;
     }
     cleaned = cleaned.replace(/[^0-9,.-]/g, "");
-    if (cleaned.includes(",") && cleaned.includes(".")) {
-      if (cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".")) {
-        cleaned = cleaned.replace(/\./g, "");
-        cleaned = cleaned.replace(",", ".");
-      } else {
-        cleaned = cleaned.replace(/,/g, "");
-      }
-    } else if (cleaned.includes(",")) {
-      cleaned = cleaned.replace(",", ".");
+    const lastComma = cleaned.lastIndexOf(",");
+    const lastDot = cleaned.lastIndexOf(".");
+    if (lastComma !== -1 || lastDot !== -1) {
+      const lastSep = Math.max(lastComma, lastDot);
+      const integerPart = cleaned.slice(0, lastSep).replace(/[.,]/g, "");
+      const decimalPart = cleaned.slice(lastSep + 1).replace(/[.,]/g, "");
+      cleaned = decimalPart ? `${integerPart}.${decimalPart}` : integerPart;
     }
     const parsed = Number(cleaned);
     return Number.isFinite(parsed) ? parsed : null;
@@ -242,6 +400,23 @@ export default function App() {
     }
     const assets = result.assets || (result.uri ? [result] : []);
     return assets.map((asset) => toFormFile(asset, "upload.xlsx"));
+  };
+
+  const pickBankingFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: [
+        "text/csv",
+        "text/plain",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      ],
+      copyToCacheDirectory: true
+    });
+    if (result.canceled) {
+      return null;
+    }
+    const asset = result.assets ? result.assets[0] : result;
+    return toFormFile(asset, "transactions.csv");
   };
 
   const pickPdf = async ({ multiple } = {}) => {
@@ -398,6 +573,448 @@ export default function App() {
     }
   };
 
+  const loadBankingCategories = async (portfolioId) => {
+    if (!token || !portfolioId) {
+      return;
+    }
+    try {
+      const data = await authJson(`/portfolios/${portfolioId}/banking/categories`);
+      setBankingCategories(data.items || []);
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  const loadBankingInstitutions = async (portfolioId) => {
+    if (!token || !portfolioId) {
+      return;
+    }
+    try {
+      const data = await authJson(`/portfolios/${portfolioId}/institutions`);
+      const names = (data.items || [])
+        .map((item) => item?.institution || item?.name)
+        .filter(Boolean);
+      setBankingInstitutions(Array.from(new Set(names)));
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    if (!bankingInstitutionInput) {
+      return;
+    }
+    if (bankingInstitutions.includes(bankingInstitutionInput)) {
+      setBankingInstitutionSelect(bankingInstitutionInput);
+    }
+  }, [bankingInstitutions, bankingInstitutionInput]);
+
+  const loadBankingTransactions = async (portfolioId) => {
+    if (!token || !portfolioId) {
+      return;
+    }
+    setBankingLoading(true);
+    setBankingError("");
+    try {
+      const params = [];
+      if (bankingMonth) {
+        params.push(`month=${encodeURIComponent(bankingMonth)}`);
+      }
+      if (bankingCategory) {
+        params.push(`category=${encodeURIComponent(bankingCategory)}`);
+      }
+      if (bankingSubcategory) {
+        params.push(`subcategory=${encodeURIComponent(bankingSubcategory)}`);
+      }
+      if (bankingInstitutionFilter) {
+        params.push(`institution=${encodeURIComponent(bankingInstitutionFilter)}`);
+      }
+      const query = params.length ? `?${params.join("&")}` : "";
+      const data = await authJson(
+        `/portfolios/${portfolioId}/banking/transactions${query}`
+      );
+      setBankingTransactions(data.items || []);
+    } catch (err) {
+      setBankingError("Unable to load transactions.");
+    } finally {
+      setBankingLoading(false);
+    }
+  };
+
+  const loadBankingBudgets = async (portfolioId) => {
+    if (!token || !portfolioId) {
+      return;
+    }
+    setBankingBudgetsLoading(true);
+    setBankingBudgetsError("");
+    try {
+      const month = bankingBudgetMonth || new Date().toISOString().slice(0, 7);
+      const data = await authJson(
+        `/portfolios/${portfolioId}/banking/budgets?month=${encodeURIComponent(
+          month
+        )}`
+      );
+      setBankingBudgets(data.items || []);
+    } catch (err) {
+      setBankingBudgetsError("Unable to load budgets.");
+    } finally {
+      setBankingBudgetsLoading(false);
+    }
+  };
+
+  const loadProfileAge = async () => {
+    if (!token) {
+      return;
+    }
+    setProfileAgeError("");
+    try {
+      const data = await authJson("/profile");
+      setProfileAgeInput(data.age ? String(data.age) : "");
+    } catch (err) {
+      setProfileAgeError("Unable to load profile age.");
+    }
+  };
+
+  const loadDebts = async () => {
+    if (!token) {
+      return;
+    }
+    setDebtsLoading(true);
+    setDebtsError("");
+    try {
+      const data = await authJson("/debts");
+      setDebts(data.items || []);
+    } catch (err) {
+      setDebtsError("Unable to load debts.");
+    } finally {
+      setDebtsLoading(false);
+    }
+  };
+
+  const loadGoals = async () => {
+    if (!token) {
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    try {
+      const data = await authJson("/goals");
+      const items = data.items || [];
+      setGoals(items);
+      if (!activeGoalId && items.length) {
+        setActiveGoalId(items[0].id);
+      }
+    } catch (err) {
+      setGoalsError("Unable to load goals.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const loadGoalDetails = async (goalId) => {
+    if (!token || !goalId) {
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    try {
+      const query = activePortfolio ? `?portfolio_id=${activePortfolio.id}` : "";
+      const data = await authJson(`/goals/${goalId}${query}`);
+      setGoalInputs(data.inputs || null);
+      setGoalMetrics(data.portfolio_fire?.metrics || null);
+      setGoalProjection(data.portfolio_fire?.projection || []);
+      setSimulationMetrics(data.simulation_fire?.metrics || null);
+      setSimulationProjection(data.simulation_fire?.projection || []);
+      setGoalContributions(data.contributions || []);
+      setGoalRenameInput(data.goal?.name || "");
+      const inputs = data.inputs || {};
+      setGoalForm({
+        start_date: inputs.start_date || "",
+        duration_years:
+          inputs.duration_years !== undefined ? String(inputs.duration_years) : "",
+        sp500_return:
+          inputs.sp500_return !== undefined
+            ? String(Number(inputs.sp500_return) * 100)
+            : "",
+        desired_monthly:
+          inputs.desired_monthly !== undefined ? String(inputs.desired_monthly) : "",
+        planned_monthly:
+          inputs.planned_monthly !== undefined
+            ? String(inputs.planned_monthly)
+            : inputs.desired_monthly !== undefined
+              ? String(inputs.desired_monthly)
+              : "",
+        withdrawal_rate:
+          inputs.withdrawal_rate !== undefined
+            ? String(Number(inputs.withdrawal_rate) * 100)
+            : "",
+        initial_investment:
+          inputs.initial_investment !== undefined
+            ? String(inputs.initial_investment)
+            : "",
+        inflation_rate:
+          inputs.inflation_rate !== undefined
+            ? String(Number(inputs.inflation_rate) * 100)
+            : "",
+        portfolio_inflation_rate:
+          inputs.portfolio_inflation_rate !== undefined
+            ? String(Number(inputs.portfolio_inflation_rate) * 100)
+            : inputs.inflation_rate !== undefined
+              ? String(Number(inputs.inflation_rate) * 100)
+              : "",
+        simulation_current_age:
+          inputs.simulation_current_age !== undefined
+            ? String(inputs.simulation_current_age)
+            : "",
+        simulation_retirement_age:
+          inputs.simulation_retirement_age !== undefined
+            ? String(inputs.simulation_retirement_age)
+            : "",
+        simulation_annual_spending:
+          inputs.simulation_annual_spending !== undefined
+            ? String(inputs.simulation_annual_spending)
+            : "",
+        simulation_current_assets:
+          inputs.simulation_current_assets !== undefined
+            ? String(inputs.simulation_current_assets)
+            : "",
+        simulation_monthly_contribution:
+          inputs.simulation_monthly_contribution !== undefined
+            ? String(inputs.simulation_monthly_contribution)
+            : "",
+        simulation_return_rate:
+          inputs.simulation_return_rate !== undefined
+            ? String(Number(inputs.simulation_return_rate) * 100)
+            : "",
+        simulation_inflation_rate:
+          inputs.simulation_inflation_rate !== undefined
+            ? String(Number(inputs.simulation_inflation_rate) * 100)
+            : "",
+        simulation_swr:
+          inputs.simulation_swr !== undefined
+            ? String(Number(inputs.simulation_swr) * 100)
+            : "",
+        return_method: inputs.return_method || "cagr"
+      });
+    } catch (err) {
+      setGoalsError("Unable to load goals.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const handleCreateGoal = async () => {
+    if (!token || !goalNameInput.trim()) {
+      setGoalsError("Goal name is required.");
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    setGoalsMessage("");
+    try {
+      const data = await authJson("/goals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: goalNameInput.trim() })
+      });
+      setGoals((prev) => [
+        data.goal,
+        ...prev.filter((item) => item.id !== data.goal.id)
+      ]);
+      setActiveGoalId(data.goal.id);
+      setGoalNameInput("");
+      setGoalsMessage("Goal created.");
+      await loadGoalDetails(data.goal.id);
+    } catch (err) {
+      setGoalsError("Unable to save goal.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const handleRenameGoal = async () => {
+    if (!token || !activeGoalId || !goalRenameInput.trim()) {
+      setGoalsError("Goal name is required.");
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    setGoalsMessage("");
+    try {
+      const data = await authJson(`/goals/${activeGoalId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: goalRenameInput.trim() })
+      });
+      setGoals((prev) =>
+        prev.map((item) => (item.id === activeGoalId ? data.goal : item))
+      );
+      setGoalsMessage("Goal updated.");
+    } catch (err) {
+      setGoalsError("Unable to save goal.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const handleDeleteGoal = async () => {
+    if (!token || !activeGoalId) {
+      return;
+    }
+    const goal = goals.find((item) => item.id === activeGoalId);
+    if (goal?.is_default) {
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    setGoalsMessage("");
+    try {
+      await authJson(`/goals/${activeGoalId}`, { method: "DELETE" });
+      const remaining = goals.filter((item) => item.id !== activeGoalId);
+      setGoals(remaining);
+      setActiveGoalId(remaining.length ? remaining[0].id : null);
+      setGoalsMessage("Goal deleted.");
+    } catch (err) {
+      setGoalsError("Unable to delete goal.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const handleSaveGoalInputs = async () => {
+    if (!token || !activeGoalId) {
+      return;
+    }
+    const duration = parseInputNumber(goalForm.duration_years);
+    const sp500 = parseInputNumber(goalForm.sp500_return);
+    const desired = parseInputNumber(goalForm.desired_monthly);
+    const planned = parseInputNumber(goalForm.planned_monthly);
+    const withdrawal = parseInputNumber(goalForm.withdrawal_rate);
+    const initial = parseInputNumber(goalForm.initial_investment);
+    const inflation = parseInputNumber(goalForm.inflation_rate);
+    const portfolioInflation = parseInputNumber(goalForm.portfolio_inflation_rate);
+    const simulationCurrentAge = parseInputNumber(goalForm.simulation_current_age);
+    const simulationRetirementAge = parseInputNumber(goalForm.simulation_retirement_age);
+    const simulationAnnualSpending = parseInputNumber(goalForm.simulation_annual_spending);
+    const simulationCurrentAssets = parseInputNumber(goalForm.simulation_current_assets);
+    const simulationMonthlyContribution = parseInputNumber(
+      goalForm.simulation_monthly_contribution
+    );
+    const simulationReturnRate = parseInputNumber(goalForm.simulation_return_rate);
+    const simulationInflationRate = parseInputNumber(goalForm.simulation_inflation_rate);
+    const simulationSWR = parseInputNumber(goalForm.simulation_swr);
+    if (
+      !goalForm.start_date ||
+      duration === null ||
+      sp500 === null ||
+      desired === null ||
+      planned === null ||
+      withdrawal === null ||
+      initial === null ||
+      inflation === null ||
+      portfolioInflation === null ||
+      simulationCurrentAge === null ||
+      simulationRetirementAge === null ||
+      simulationAnnualSpending === null ||
+      simulationCurrentAssets === null ||
+      simulationMonthlyContribution === null ||
+      simulationReturnRate === null ||
+      simulationInflationRate === null ||
+      simulationSWR === null
+    ) {
+      setGoalsError("Fill all inputs before saving.");
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    setGoalsMessage("");
+    try {
+        await authJson(`/goals/${activeGoalId}/inputs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            start_date: goalForm.start_date,
+            duration_years: duration,
+            sp500_return: sp500,
+            desired_monthly: desired,
+          planned_monthly: planned,
+          withdrawal_rate: withdrawal,
+          initial_investment: initial,
+          inflation_rate: inflation,
+          portfolio_inflation_rate: portfolioInflation,
+          simulation_current_age: simulationCurrentAge,
+          simulation_retirement_age: simulationRetirementAge,
+          simulation_annual_spending: simulationAnnualSpending,
+          simulation_current_assets: simulationCurrentAssets,
+          simulation_monthly_contribution: simulationMonthlyContribution,
+          simulation_return_rate: simulationReturnRate,
+          simulation_inflation_rate: simulationInflationRate,
+          simulation_swr: simulationSWR,
+          return_method: goalForm.return_method
+        })
+      });
+      setGoalsMessage("Inputs saved.");
+      loadGoalDetails(activeGoalId);
+    } catch (err) {
+      setGoalsError("Unable to save goal.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const handleAddGoalContribution = async () => {
+    if (!token || !activeGoalId) {
+      return;
+    }
+    const amount = parseInputNumber(goalContributionAmount);
+    if (!goalContributionDate || amount === null) {
+      setGoalsError("Contribution date and amount required.");
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    setGoalsMessage("");
+    try {
+      await authJson(`/goals/${activeGoalId}/contributions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contribution_date: goalContributionDate,
+          amount
+        })
+      });
+      setGoalContributionDate("");
+      setGoalContributionAmount("");
+      setGoalsMessage("Contribution saved.");
+      loadGoalDetails(activeGoalId);
+    } catch (err) {
+      setGoalsError("Unable to save contribution.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const handleDeleteGoalContribution = async (contributionId) => {
+    if (!token || !activeGoalId) {
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError("");
+    setGoalsMessage("");
+    try {
+      await authJson(
+        `/goals/${activeGoalId}/contributions/${contributionId}`,
+        { method: "DELETE" }
+      );
+      setGoalsMessage("Contribution deleted.");
+      loadGoalDetails(activeGoalId);
+    } catch (err) {
+      setGoalsError("Unable to delete contribution.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
   const openInstitutionDetail = async (institution) => {
     if (!activePortfolio) {
       return;
@@ -535,12 +1152,89 @@ export default function App() {
           : `/portfolios/${portfolioId}/holdings`;
       const query = params.toString();
       const data = await authJson(`${path}${query ? `?${query}` : ""}`);
-      setHoldingsItems(data.items || []);
+      setHoldingsItems((current) => {
+        const tagMap = new Map(
+          current.map((item) => [
+            String(item.ticker || "").trim().toUpperCase(),
+            item.tags || []
+          ])
+        );
+        return (data.items || []).map((item) => {
+          if (item.tags && item.tags.length) {
+            return item;
+          }
+          const fallback = tagMap.get(
+            String(item.ticker || "").trim().toUpperCase()
+          );
+          return fallback && fallback.length ? { ...item, tags: fallback } : item;
+        });
+      });
       setHoldingsTotal(Number(data.total_value) || 0);
     } catch (err) {
       setHoldingsError("Unable to load holdings.");
     } finally {
       setHoldingsLoading(false);
+    }
+  };
+
+  const loadHoldingTags = async () => {
+    if (!token) {
+      return;
+    }
+    setHoldingTagError("");
+    try {
+      const data = await authJson("/holdings/tags");
+      setHoldingTags(data.items || []);
+      setHoldingCustomTags(data.custom || []);
+    } catch (err) {
+      setHoldingTagError("Unable to load tags.");
+    }
+  };
+
+  const handleAddHoldingTag = async () => {
+    if (!holdingTagInput.trim()) {
+      setHoldingTagError("Tag name is required.");
+      return;
+    }
+    setHoldingTagError("");
+    setHoldingTagMessage("");
+    try {
+      await authJson("/holdings/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: holdingTagInput.trim() })
+      });
+      setHoldingTagInput("");
+      setHoldingTagMessage("Tag added.");
+      await loadHoldingTags();
+    } catch (err) {
+      setHoldingTagError("Unable to save tag.");
+    }
+  };
+
+  const handleDeleteHoldingTag = async (tag) => {
+    setHoldingTagError("");
+    setHoldingTagMessage("");
+    try {
+      await authJson(`/holdings/tags/${encodeURIComponent(tag)}`, {
+        method: "DELETE"
+      });
+      setHoldingTagMessage("Tag removed.");
+      await loadHoldingTags();
+      setHoldingMetaDrafts((current) => {
+        const next = { ...current };
+        Object.keys(next).forEach((key) => {
+          if (next[key]?.tags) {
+            next[key] = {
+              ...next[key],
+              tags: next[key].tags.filter((entry) => entry !== tag)
+            };
+          }
+        });
+        return next;
+      });
+    } catch (err) {
+      setHoldingTagError("Unable to delete tag.");
     }
   };
 
@@ -596,6 +1290,7 @@ export default function App() {
     if (data.status === "ok") {
       setToken(data.token);
       setMode("home");
+      setHomeTab("cockpit");
       setMessage("Logged in.");
       return;
     }
@@ -716,6 +1411,117 @@ export default function App() {
               setDeletePortfolioError("Unable to delete portfolio.");
             } finally {
               setDeletingPortfolio(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const resetDebtForm = () => {
+    setDebtName("");
+    setDebtOriginalAmount("");
+    setDebtCurrentBalance("");
+    setDebtMonthlyPayment("");
+    setDebtEditingId(null);
+  };
+
+  const handleSaveProfileAge = async () => {
+    if (!token) {
+      return;
+    }
+    setProfileAgeSaving(true);
+    setProfileAgeMessage("");
+    setProfileAgeError("");
+    const trimmed = profileAgeInput.trim();
+    const payload =
+      trimmed.length === 0 ? { age: null } : { age: Number.parseInt(trimmed, 10) };
+    if (payload.age !== null && !Number.isFinite(payload.age)) {
+      setProfileAgeError("Invalid age.");
+      setProfileAgeSaving(false);
+      return;
+    }
+    try {
+      const data = await authJson("/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      setProfileAgeInput(data.age ? String(data.age) : "");
+      setProfileAgeMessage("Age saved.");
+    } catch (err) {
+      setProfileAgeError("Unable to save age.");
+    } finally {
+      setProfileAgeSaving(false);
+    }
+  };
+
+  const handleSaveDebt = async () => {
+    if (!token) {
+      return;
+    }
+    setDebtsMessage("");
+    setDebtsError("");
+    const original = parseInputNumber(debtOriginalAmount);
+    const balance = parseInputNumber(debtCurrentBalance);
+    const monthly = parseInputNumber(debtMonthlyPayment);
+    if (!debtName.trim() || original === null || balance === null || monthly === null) {
+      setDebtsError("Fill in all debt fields.");
+      return;
+    }
+    setDebtSaving(true);
+    try {
+      const data = await authJson(
+        debtEditingId ? `/debts/${debtEditingId}` : "/debts",
+        {
+          method: debtEditingId ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: debtName.trim(),
+            original_amount: original,
+            current_balance: balance,
+            monthly_payment: monthly
+          })
+        }
+      );
+      const saved = data.debt;
+      setDebts((prev) =>
+        debtEditingId
+          ? prev.map((item) => (item.id === debtEditingId ? saved : item))
+          : [saved, ...prev]
+      );
+      setDebtsMessage(debtEditingId ? "Debt updated." : "Debt saved.");
+      resetDebtForm();
+    } catch (err) {
+      setDebtsError("Unable to save debt.");
+    } finally {
+      setDebtSaving(false);
+    }
+  };
+
+  const handleEditDebt = (debt) => {
+    setDebtEditingId(debt.id);
+    setDebtName(debt.name);
+    setDebtOriginalAmount(String(debt.original_amount));
+    setDebtCurrentBalance(String(debt.current_balance));
+    setDebtMonthlyPayment(String(debt.monthly_payment));
+  };
+
+  const handleDeleteDebt = (debtId) => {
+    Alert.alert(
+      "Delete debt",
+      "This will remove the debt entry. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await authJson(`/debts/${debtId}`, { method: "DELETE" });
+              setDebts((prev) => prev.filter((item) => item.id !== debtId));
+            } catch (err) {
+              setDebtsError("Unable to delete debt.");
             }
           }
         }
@@ -1051,6 +1857,14 @@ export default function App() {
             : Number(item.current_price) || 0
       }));
       setXtbHoldings(holdings);
+      const operations = (data.operations || []).map((item) => ({
+        ...item,
+        amount:
+          item.amount === null || item.amount === undefined
+            ? null
+            : Number(item.amount) || 0
+      }));
+      setXtbOperations(operations);
       setXtbWarnings(data.warnings || []);
     } catch (err) {
       setXtbError(err.message || "Preview failed.");
@@ -1073,11 +1887,16 @@ export default function App() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ items: xtbItems, holdings: xtbHoldings })
+        body: JSON.stringify({
+          items: xtbItems,
+          holdings: xtbHoldings,
+          operations: xtbOperations
+        })
       });
       setXtbMessage("XTB import saved.");
       setXtbItems([]);
       setXtbHoldings([]);
+      setXtbOperations([]);
       setXtbFiles([]);
       await loadXtbImports(activePortfolio.id);
       await refreshPortfolioData(activePortfolio.id);
@@ -1493,6 +2312,332 @@ export default function App() {
     }
   };
 
+  const bankingMappingOptions = [
+    { value: "ignore", label: "Ignore" },
+    { value: "date", label: "Date" },
+    { value: "description", label: "Description" },
+    { value: "amount", label: "Amount" },
+    { value: "debit", label: "Debit" },
+    { value: "credit", label: "Credit" },
+    { value: "balance", label: "Balance" },
+    { value: "currency", label: "Currency" }
+  ];
+
+  const deriveBankingMapping = (mapping, columns) => {
+    const result = new Array(columns.length).fill("ignore");
+    Object.entries(mapping || {}).forEach(([key, value]) => {
+      if (typeof value === "number" && value >= 0 && value < columns.length) {
+        result[value] = key;
+      }
+    });
+    return result;
+  };
+
+  const resolveBankingInstitution = () => {
+    if (
+      bankingInstitutionSelect &&
+      bankingInstitutionSelect !== "Custom" &&
+      bankingInstitutionSelect !== "Select"
+    ) {
+      return bankingInstitutionSelect;
+    }
+    return bankingInstitutionInput;
+  };
+
+  const handleBankingPreview = async () => {
+    if (!activePortfolio) {
+      return;
+    }
+    if (!bankingFile && !bankingPaste.trim()) {
+      setBankingError("Select a file or paste data first.");
+      return;
+    }
+    setBankingPreviewing(true);
+    setBankingError("");
+    setBankingMessage("");
+    try {
+      const formData = new FormData();
+      if (bankingFile) {
+        formData.append("file", bankingFile);
+      }
+      if (bankingPaste.trim()) {
+        formData.append("text", bankingPaste.trim());
+      }
+      const institutionName = resolveBankingInstitution();
+      if (institutionName.trim()) {
+        formData.append("institution", institutionName.trim());
+      }
+      const response = await fetch(
+        `${API_BASE}/portfolios/${activePortfolio.id}/banking/preview`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          body: formData
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.detail || "Preview failed.");
+      }
+      setBankingPreview(data);
+      setBankingMapping(deriveBankingMapping(data.mapping, data.columns || []));
+    } catch (err) {
+      setBankingError(err.message || "Preview failed.");
+    } finally {
+      setBankingPreviewing(false);
+    }
+  };
+
+  const handleBankingMappingChange = (index, value) => {
+    setBankingMapping((current) => {
+      const next = [...current];
+      if (value !== "ignore") {
+        next.forEach((item, idx) => {
+          if (idx !== index && item === value) {
+            next[idx] = "ignore";
+          }
+        });
+      }
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const handleBankingRowToggle = (index) => {
+    if (!bankingPreview) {
+      return;
+    }
+    const nextRows = bankingPreview.rows.map((row, idx) =>
+      idx === index ? { ...row, include: !row.include } : row
+    );
+    setBankingPreview({ ...bankingPreview, rows: nextRows });
+  };
+
+  const buildBankingMappingPayload = () => {
+    const mapping = {
+      date: null,
+      description: null,
+      amount: null,
+      balance: null,
+      currency: null,
+      debit: null,
+      credit: null
+    };
+    bankingMapping.forEach((value, index) => {
+      if (value && value !== "ignore") {
+        mapping[value] = index;
+      }
+    });
+    return mapping;
+  };
+
+  const handleBankingCommit = async () => {
+    if (!activePortfolio || !bankingPreview) {
+      setBankingError("Preview the file first.");
+      return;
+    }
+    const institutionName = resolveBankingInstitution();
+    if (!institutionName.trim()) {
+      setBankingError("Institution is required.");
+      return;
+    }
+    if (
+      bankingPreview.warnings?.length &&
+      bankingPreview.rows?.length &&
+      bankingPreview.warnings.length >= bankingPreview.rows.length
+    ) {
+      setBankingError("No valid rows found. Check the column detection.");
+      return;
+    }
+    setBankingImporting(true);
+    setBankingError("");
+    setBankingMessage("");
+    try {
+      await authJson(`/portfolios/${activePortfolio.id}/banking/commit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          source_file: bankingPreview.source_file,
+          file_hash: bankingPreview.file_hash,
+          institution: institutionName.trim(),
+          columns: bankingPreview.columns || [],
+          mapping: buildBankingMappingPayload(),
+          rows: bankingPreview.rows || []
+        })
+      });
+      setBankingMessage("Transactions imported.");
+      setBankingPreview(null);
+      setBankingFile(null);
+      setBankingPaste("");
+      setBankingShowMapping(false);
+      setBankingShowWarnings(false);
+      await loadBankingInstitutions(activePortfolio.id);
+      await loadBankingTransactions(activePortfolio.id);
+      await loadBankingBudgets(activePortfolio.id);
+    } catch (err) {
+      const detail = err.message || "Import failed.";
+      if (String(detail).toLowerCase().includes("no valid rows")) {
+        setBankingError("No valid rows found. Check the column detection.");
+      } else {
+        setBankingError(detail);
+      }
+    } finally {
+      setBankingImporting(false);
+    }
+  };
+
+  const handleBankingClear = async () => {
+    if (!activePortfolio) {
+      return;
+    }
+    Alert.alert(
+      "Clear transactions",
+      "This will remove all imported banking transactions.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: async () => {
+            setBankingImporting(true);
+            setBankingError("");
+            setBankingMessage("");
+            try {
+              await authJson(`/portfolios/${activePortfolio.id}/banking/clear`, {
+                method: "POST"
+              });
+              setBankingMessage("Banking transactions cleared.");
+              setBankingPreview(null);
+              setBankingFile(null);
+              setBankingPaste("");
+              setBankingShowMapping(false);
+              setBankingShowWarnings(false);
+              await loadBankingInstitutions(activePortfolio.id);
+              await loadBankingTransactions(activePortfolio.id);
+              await loadBankingBudgets(activePortfolio.id);
+            } catch (err) {
+              setBankingError("Unable to clear banking transactions.");
+            } finally {
+              setBankingImporting(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleBankingCategoryUpdate = async (txId, category, subcategory) => {
+    if (!activePortfolio) {
+      return;
+    }
+    setBankingUpdatingId(txId);
+    setBankingError("");
+    try {
+      const data = await authJson(
+        `/portfolios/${activePortfolio.id}/banking/transactions/${txId}/category`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            category,
+            subcategory: subcategory || null
+          })
+        }
+      );
+      const updated = data.transaction;
+      setBankingTransactions((current) =>
+        current.map((item) =>
+          item.id === txId
+            ? {
+                ...item,
+                category: updated.category,
+                subcategory: updated.subcategory
+              }
+            : item
+        )
+      );
+      await loadBankingCategories(activePortfolio.id);
+      await loadBankingBudgets(activePortfolio.id);
+    } catch (err) {
+      setBankingError("Unable to update category.");
+    } finally {
+      setBankingUpdatingId(null);
+    }
+  };
+
+  const handleBankingBudgetSave = async () => {
+    if (!activePortfolio) {
+      return;
+    }
+    const category = bankingBudgetCategory.trim();
+    if (!category || category === "Select") {
+      setBankingBudgetsError("Category is required.");
+      return;
+    }
+    const amountValue = parseInputNumber(bankingBudgetAmount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      setBankingBudgetsError("Amount must be greater than 0.");
+      return;
+    }
+    const month = bankingBudgetMonth || new Date().toISOString().slice(0, 7);
+    setBankingBudgetsLoading(true);
+    setBankingBudgetsError("");
+    try {
+      await authJson(`/portfolios/${activePortfolio.id}/banking/budgets`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          category,
+          amount: amountValue,
+          month
+        })
+      });
+      setBankingBudgetAmount("");
+      await loadBankingBudgets(activePortfolio.id);
+      await loadBankingCategories(activePortfolio.id);
+    } catch (err) {
+      setBankingBudgetsError("Unable to save budget.");
+    } finally {
+      setBankingBudgetsLoading(false);
+    }
+  };
+
+  const handleBankingBudgetDelete = async (budgetId) => {
+    if (!activePortfolio) {
+      return;
+    }
+    Alert.alert("Delete budget", "Remove this budget?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          setBankingBudgetsLoading(true);
+          setBankingBudgetsError("");
+          try {
+            await authJson(
+              `/portfolios/${activePortfolio.id}/banking/budgets/${budgetId}`,
+              { method: "DELETE" }
+            );
+            await loadBankingBudgets(activePortfolio.id);
+          } catch (err) {
+            setBankingBudgetsError("Unable to delete budget.");
+          } finally {
+            setBankingBudgetsLoading(false);
+          }
+        }
+      }
+    ]);
+  };
+
   const handleTradeDelete = async (entryId) => {
     if (!activePortfolio) {
       return;
@@ -1638,6 +2783,70 @@ export default function App() {
     token
   ]);
 
+  useEffect(() => {
+    if (mode !== "home" || homeTab !== "investments") {
+      return;
+    }
+    loadHoldingTags();
+  }, [mode, homeTab, token]);
+
+  useEffect(() => {
+    if (mode !== "home" || homeTab !== "banking" || !activePortfolio) {
+      return;
+    }
+    loadBankingCategories(activePortfolio.id);
+    loadBankingInstitutions(activePortfolio.id);
+  }, [mode, homeTab, activePortfolio?.id, token]);
+
+  useEffect(() => {
+    if (mode !== "home" || homeTab !== "banking" || !activePortfolio) {
+      return;
+    }
+    loadBankingTransactions(activePortfolio.id);
+  }, [
+    mode,
+    homeTab,
+    activePortfolio?.id,
+    bankingMonth,
+    bankingCategory,
+    bankingSubcategory,
+    bankingInstitutionFilter,
+    token
+  ]);
+
+  useEffect(() => {
+    if (
+      mode !== "home" ||
+      (homeTab !== "banking" && homeTab !== "cockpit") ||
+      !activePortfolio
+    ) {
+      return;
+    }
+    loadBankingBudgets(activePortfolio.id);
+  }, [mode, homeTab, activePortfolio?.id, bankingBudgetMonth, token]);
+
+  useEffect(() => {
+    if (mode !== "home" || (homeTab !== "debts" && homeTab !== "cockpit")) {
+      return;
+    }
+    loadProfileAge();
+    loadDebts();
+  }, [mode, homeTab, token]);
+
+  useEffect(() => {
+    if (mode !== "home" || homeTab !== "goals") {
+      return;
+    }
+    loadGoals();
+  }, [mode, homeTab, token]);
+
+  useEffect(() => {
+    if (mode !== "home" || homeTab !== "goals" || !activeGoalId) {
+      return;
+    }
+    loadGoalDetails(activeGoalId);
+  }, [mode, homeTab, activeGoalId, activePortfolio?.id, token]);
+
   const categoryOptions = useMemo(
     () => [...localCategories, "Unknown"],
     [localCategories]
@@ -1771,6 +2980,82 @@ export default function App() {
     return withChange.slice(-5).reverse();
   }, [dailyHistory]);
 
+  const cockpitDelta = useMemo(() => {
+    if (historySeries.length < 2) {
+      return { value: 0, percent: 0 };
+    }
+    const first = historySeries[0];
+    const last = historySeries[historySeries.length - 1];
+    const delta = (Number(last.total) || 0) - (Number(first.total) || 0);
+    const percent = first.total ? (delta / first.total) * 100 : 0;
+    return { value: delta, percent };
+  }, [historySeries]);
+
+  const cockpitTopInstitutions = useMemo(() => {
+    return [...institutions]
+      .sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0))
+      .slice(0, 5);
+  }, [institutions]);
+
+  const cockpitBudgetTotals = useMemo(() => {
+    const total = bankingBudgets.reduce(
+      (sum, item) => sum + (Number(item.amount) || 0),
+      0
+    );
+    const spent = bankingBudgets.reduce(
+      (sum, item) => sum + (Number(item.spent) || 0),
+      0
+    );
+    const remaining = bankingBudgets.reduce(
+      (sum, item) => sum + (Number(item.remaining) || 0),
+      0
+    );
+    const percent = total ? (spent / total) * 100 : 0;
+    return { total, spent, remaining, percent };
+  }, [bankingBudgets]);
+
+  const cockpitDebtTotals = useMemo(() => {
+    const totalBalance = debts.reduce(
+      (sum, item) => sum + (Number(item.current_balance) || 0),
+      0
+    );
+    const totalMonthly = debts.reduce(
+      (sum, item) => sum + (Number(item.monthly_payment) || 0),
+      0
+    );
+    const avgPercent =
+      debts.length > 0
+        ? debts.reduce((sum, item) => sum + (Number(item.percent_paid) || 0), 0) /
+          debts.length
+        : 0;
+    return { totalBalance, totalMonthly, avgPercent, count: debts.length };
+  }, [debts]);
+
+  const debtPreview = useMemo(() => {
+    const original = parseInputNumber(debtOriginalAmount);
+    const balance = parseInputNumber(debtCurrentBalance);
+    const monthly = parseInputNumber(debtMonthlyPayment);
+    const age = profileAgeInput ? Number.parseInt(profileAgeInput, 10) : null;
+    let percentPaid = null;
+    let monthsRemaining = null;
+    let payoffAge = null;
+    if (original && original > 0 && balance !== null) {
+      percentPaid = ((original - balance) / original) * 100;
+    }
+    if (monthly && monthly > 0 && balance !== null) {
+      monthsRemaining = Math.ceil(balance / monthly);
+    }
+    if (age !== null && Number.isFinite(age) && monthsRemaining !== null) {
+      payoffAge = age + monthsRemaining / 12;
+    }
+    return { original, balance, monthly, percentPaid, monthsRemaining, payoffAge };
+  }, [
+    debtOriginalAmount,
+    debtCurrentBalance,
+    debtMonthlyPayment,
+    profileAgeInput
+  ]);
+
   const holdingsCategories = useMemo(() => {
     if (holdingsView === "overall") {
       const set = new Set();
@@ -1797,6 +3082,218 @@ export default function App() {
     });
     return Array.from(set);
   }, [holdingsItems]);
+
+  const renderCockpit = () => {
+    if (!activePortfolio) {
+      return (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Cockpit Overview</Text>
+          <Text style={styles.subtitle}>Create a portfolio first.</Text>
+        </View>
+      );
+    }
+    const budgetPercent = Math.min(100, cockpitBudgetTotals.percent || 0);
+    const budgetStatusStyle =
+      cockpitBudgetTotals.percent >= 100
+        ? styles.barFillDanger
+        : cockpitBudgetTotals.percent >= 90
+        ? styles.barFillWarn
+        : cockpitBudgetTotals.percent >= 70
+        ? styles.barFillCaution
+        : styles.barFillPos;
+    return (
+      <>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Cockpit Overview</Text>
+          <Text style={styles.subtitle}>
+            Your financial performance at a glance.
+          </Text>
+        </View>
+
+        <View style={styles.chartCard}>
+          <Text style={styles.sectionTitle}>Portfolio performance</Text>
+          <Text style={styles.metricValue}>
+            {formatCurrency(summary?.total)}
+          </Text>
+          <Text style={styles.subtitle}>Total portfolio value</Text>
+          <View style={styles.metricRow}>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Change since start</Text>
+              <Text style={styles.metricValue}>
+                {formatSigned(cockpitDelta.value)}
+              </Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Change %</Text>
+              <Text style={styles.metricValue}>
+                {formatSignedPercent(cockpitDelta.percent)}
+              </Text>
+            </View>
+          </View>
+          {historySeries.length > 1 ? (
+            <Svg width={280} height={140}>
+              <Path
+                d={historySeries
+                  .map((item, index) => {
+                    const width = 260;
+                    const height = 100;
+                    const padding = 10;
+                    const range = historyRange.max - historyRange.min || 1;
+                    const xStep =
+                      historySeries.length > 1
+                        ? width / (historySeries.length - 1)
+                        : 0;
+                    const x = padding + index * xStep;
+                    const y =
+                      padding +
+                      (height -
+                        ((item.total - historyRange.min) / range) * height);
+                    return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+                  })
+                  .join(" ")}
+                stroke="#2ad68d"
+                strokeWidth={2}
+                fill="none"
+              />
+            </Svg>
+          ) : (
+            <Text style={styles.subtitle}>No history yet.</Text>
+          )}
+        </View>
+
+        <View style={styles.chartCard}>
+          <Text style={styles.sectionTitle}>Sub-portfolios</Text>
+          {cockpitTopInstitutions.length ? (
+            cockpitTopInstitutions.map((item) => {
+              const delta = item.vs_last_month ?? item.gains ?? 0;
+              const deltaPercent = item.profit_percent ?? 0;
+              return (
+                <View style={styles.tableRow} key={item.institution}>
+                  <View style={styles.tableCell}>
+                    <Text style={styles.tableTitle}>{item.institution}</Text>
+                    <Text style={styles.subtitle}>
+                      {formatCurrency(item.total)}
+                    </Text>
+                  </View>
+                  <View style={[styles.tableCell, styles.tableCellRight]}>
+                    <Text
+                      style={[
+                        styles.tableValue,
+                        delta >= 0 ? styles.posValue : styles.negValue
+                      ]}
+                    >
+                      {formatSigned(delta)}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.subtitle,
+                        deltaPercent >= 0 ? styles.posValue : styles.negValue
+                      ]}
+                    >
+                      {formatSignedPercent(deltaPercent)}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.subtitle}>No sub-portfolios yet.</Text>
+          )}
+        </View>
+
+        <View style={styles.chartCard}>
+          <Text style={styles.sectionTitle}>Monthly budget</Text>
+          {bankingBudgets.length ? (
+            <>
+              <View style={styles.metricRow}>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Spent</Text>
+                  <Text style={styles.metricValue}>
+                    {formatCurrency(cockpitBudgetTotals.spent)}
+                  </Text>
+                </View>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Remaining</Text>
+                  <Text style={styles.metricValue}>
+                    {formatCurrency(cockpitBudgetTotals.remaining)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.barRow}>
+                <View style={styles.barTrack}>
+                  <View
+                    style={[
+                      styles.barFill,
+                      budgetStatusStyle,
+                      { width: `${budgetPercent}%` }
+                    ]}
+                  />
+                </View>
+                <Text style={styles.barValue}>
+                  {budgetPercent.toFixed(1)}%
+                </Text>
+              </View>
+            </>
+          ) : (
+            <Text style={styles.subtitle}>
+              {bankingBudgetsError || "No budgets yet."}
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.chartCard}>
+          <Text style={styles.sectionTitle}>Real estate income</Text>
+          <Text style={styles.subtitle}>Monthly income</Text>
+          <Text style={styles.metricValue}>{formatCurrency(0)}</Text>
+        </View>
+
+        <View style={styles.chartCard}>
+          <Text style={styles.sectionTitle}>Debt summary</Text>
+          {debtsLoading ? (
+            <Text style={styles.subtitle}>Loading...</Text>
+          ) : debts.length ? (
+            <>
+              <View style={styles.metricRow}>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Outstanding</Text>
+                  <Text style={styles.metricValue}>
+                    {formatCurrency(cockpitDebtTotals.totalBalance)}
+                  </Text>
+                </View>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Monthly</Text>
+                  <Text style={styles.metricValue}>
+                    {formatCurrency(cockpitDebtTotals.totalMonthly)}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.subtitle}>
+                Avg paid {cockpitDebtTotals.avgPercent.toFixed(1)}%
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.subtitle}>
+              {debtsError || "No debts tracked yet."}
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.chartCard}>
+          <Text style={styles.sectionTitle}>FIRE journey</Text>
+          <Text style={styles.subtitle}>
+            Financial independence progress
+          </Text>
+          <View style={styles.barRow}>
+            <View style={styles.barTrack}>
+              <View style={[styles.barFill, styles.barFillPos, { width: "12%" }]} />
+            </View>
+            <Text style={styles.barValue}>12%</Text>
+          </View>
+          <Text style={styles.subtitle}>Set a goal in MyGoals to enable this view.</Text>
+        </View>
+      </>
+    );
+  };
 
   const renderOverview = () => (
     <>
@@ -1907,13 +3404,27 @@ export default function App() {
             <View style={styles.metricRow}>
               <View style={styles.metricCard}>
                 <Text style={styles.metricLabel}>Total profit</Text>
-                <Text style={styles.metricValue}>
+                <Text
+                  style={[
+                    styles.metricValue,
+                    (summary.total_profit || 0) >= 0
+                      ? styles.posValue
+                      : styles.negValue
+                  ]}
+                >
                   {formatCurrency(summary.total_profit)}
                 </Text>
               </View>
               <View style={styles.metricCard}>
                 <Text style={styles.metricLabel}>Profit %</Text>
-                <Text style={styles.metricValue}>
+                <Text
+                  style={[
+                    styles.metricValue,
+                    (summary.profit_percent || 0) >= 0
+                      ? styles.posValue
+                      : styles.negValue
+                  ]}
+                >
                   {Number(summary.profit_percent || 0).toFixed(2)}%
                 </Text>
               </View>
@@ -2075,10 +3586,28 @@ export default function App() {
                         Total: {formatCurrency(item.total)}
                       </Text>
                       <Text style={styles.metaText}>
-                        Vs last month: {formatSigned(item.vs_last_month)}
+                        Vs last month:{" "}
+                        <Text
+                          style={
+                            (item.vs_last_month ?? 0) >= 0
+                              ? styles.posValue
+                              : styles.negValue
+                          }
+                        >
+                          {formatSigned(item.vs_last_month)}
+                        </Text>
                       </Text>
                       <Text style={styles.metaText}>
-                        Profit %: {formatSignedPercent(item.profit_percent)}
+                        Profit %:{" "}
+                        <Text
+                          style={
+                            (item.profit_percent ?? 0) >= 0
+                              ? styles.posValue
+                              : styles.negValue
+                          }
+                        >
+                          {formatSignedPercent(item.profit_percent)}
+                        </Text>
                       </Text>
                       <Text style={styles.metaText}>
                         Beni:{" "}
@@ -2273,7 +3802,8 @@ export default function App() {
             sector: item.sector || "",
             industry: item.industry || "",
             country: item.country || "",
-            asset_type: item.asset_type || getAssetType(item.category)
+            asset_type: item.asset_type || getAssetType(item.category),
+            tags: item.tags ? [...item.tags] : []
           }
         };
       });
@@ -2284,6 +3814,19 @@ export default function App() {
         ...current,
         [key]: { ...(current[key] || {}), ...changes }
       }));
+    };
+
+    const toggleHoldingTag = (key, tag) => {
+      setHoldingMetaDrafts((current) => {
+        const draft = current[key] || {};
+        const tags = Array.isArray(draft.tags) ? draft.tags : [];
+        const exists = tags.includes(tag);
+        const nextTags = exists ? tags.filter((item) => item !== tag) : [...tags, tag];
+        return {
+          ...current,
+          [key]: { ...draft, tags: nextTags }
+        };
+      });
     };
 
     const handleMetaSave = async (key, item) => {
@@ -2310,7 +3853,8 @@ export default function App() {
             sector: draft.sector,
             industry: draft.industry,
             country: draft.country,
-            asset_type: draft.asset_type
+            asset_type: draft.asset_type,
+            tags: draft.tags || []
           })
         });
         setHoldingMetaMessage("Holding details saved.");
@@ -2612,7 +4156,8 @@ export default function App() {
               sector: item.sector || "",
               industry: item.industry || "",
               country: item.country || "",
-              asset_type: item.asset_type || getAssetType(item.category)
+              asset_type: item.asset_type || getAssetType(item.category),
+              tags: item.tags ? [...item.tags] : []
             };
             return (
               <TouchableOpacity
@@ -2635,10 +4180,15 @@ export default function App() {
                     {item.institution ? (
                       <Text style={styles.metaText}>
                         {item.institution}
-                        {item.category ? ` · ${item.category}` : ""}
+                        {item.category ? ` - ${item.category}` : ""}
                       </Text>
                     ) : item.category ? (
                       <Text style={styles.metaText}>{item.category}</Text>
+                    ) : null}
+                    {item.tags && item.tags.length ? (
+                      <Text style={styles.metaText}>
+                        Tags: {item.tags.join(", ")}
+                      </Text>
                     ) : null}
                   </View>
                   <View style={styles.holdingRight}>
@@ -2739,6 +4289,63 @@ export default function App() {
                           updateMetaDraft(key, { asset_type: value })
                         }
                       />
+                      <Text style={styles.metaText}>Tags</Text>
+                      {holdingTagMessage ? (
+                        <Text style={styles.message}>{holdingTagMessage}</Text>
+                      ) : null}
+                      {holdingTagError ? (
+                        <Text style={styles.error}>{holdingTagError}</Text>
+                      ) : null}
+                      <View style={styles.tagWrap}>
+                        {holdingTags.map((tag) => {
+                          const active = (metaDraft.tags || []).includes(tag);
+                          const isCustom = holdingCustomTags.some(
+                            (item) => item.toLowerCase() === tag.toLowerCase()
+                          );
+                          return (
+                            <View
+                              key={`${key}-${tag}`}
+                              style={[styles.tagChip, active && styles.tagChipActive]}
+                            >
+                              <TouchableOpacity
+                                onPress={() => toggleHoldingTag(key, tag)}
+                              >
+                                <Text
+                                  style={[
+                                    styles.tagChipText,
+                                    active && styles.tagChipTextActive
+                                  ]}
+                                >
+                                  {tag}
+                                </Text>
+                              </TouchableOpacity>
+                              {isCustom ? (
+                                <TouchableOpacity
+                                  style={styles.tagRemove}
+                                  onPress={() => handleDeleteHoldingTag(tag)}
+                                >
+                                  <Text style={styles.tagRemoveText}>×</Text>
+                                </TouchableOpacity>
+                              ) : null}
+                            </View>
+                          );
+                        })}
+                      </View>
+                      <View style={styles.tagInputRow}>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Add tag"
+                          placeholderTextColor="#6f7f96"
+                          value={holdingTagInput}
+                          onChangeText={setHoldingTagInput}
+                        />
+                        <TouchableOpacity
+                          style={styles.secondaryBtn}
+                          onPress={handleAddHoldingTag}
+                        >
+                          <Text style={styles.secondaryBtnText}>Add</Text>
+                        </TouchableOpacity>
+                      </View>
                       <TouchableOpacity
                         style={styles.secondaryBtn}
                         onPress={() => handleMetaSave(key, item)}
@@ -2891,12 +4498,1703 @@ export default function App() {
     );
   };
 
-  const renderGoals = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>MyGoals</Text>
-      <Text style={styles.subtitle}>Coming soon.</Text>
-    </View>
+  const renderBanking = () => {
+    if (!activePortfolio) {
+      return <Text style={styles.subtitle}>Select a portfolio first.</Text>;
+    }
+    const categoryOptions = [
+      "All",
+      ...bankingCategories.map((item) => item.name)
+    ];
+    const subcategoryOptions = bankingCategory
+      ? bankingCategories.find((item) => item.name === bankingCategory)
+          ?.subcategories?.length
+        ? bankingCategories.find((item) => item.name === bankingCategory)
+            ?.subcategories || []
+        : [bankingCategory]
+      : [];
+    const institutionOptions = ["All", ...bankingInstitutions];
+    const mappingOptions = bankingMappingOptions.map((option) => option.value);
+    const bankingCategoryGroups = bankingCategories.map((entry) => ({
+      name: entry.name,
+      subcategories: entry.subcategories?.length
+        ? entry.subcategories
+        : [entry.name]
+    }));
+
+    return (
+      <>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Banking Transactions</Text>
+          <Text style={styles.subtitle}>
+            Import transactions and classify them.
+          </Text>
+        </View>
+
+        <View style={styles.importCard}>
+          <View style={styles.importHeader}>
+            <View>
+              <Text style={styles.importTitle}>Import transactions</Text>
+              <Text style={styles.subtitle}>
+                Upload a file or paste data.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.bankingSplit}>
+            <View style={styles.bankingSplitBlock}>
+              <Text style={styles.metaText}>Institution</Text>
+              <CategoryPicker
+                value={bankingInstitutionSelect || "Select"}
+                options={["Select", ...bankingInstitutions, "Custom"]}
+                onChange={(value) => {
+                  setBankingInstitutionSelect(value);
+                  if (value && value !== "Custom" && value !== "Select") {
+                    setBankingInstitutionInput(value);
+                  } else if (value === "Custom") {
+                    setBankingInstitutionInput("");
+                  } else {
+                    setBankingInstitutionInput("");
+                  }
+                }}
+              />
+              {bankingInstitutionSelect === "Custom" ? (
+                <TextInput
+                  style={styles.input}
+                  placeholder="Custom institution"
+                  placeholderTextColor="#6f7f96"
+                  value={bankingInstitutionInput}
+                  onChangeText={setBankingInstitutionInput}
+                />
+              ) : null}
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={async () => {
+                  const file = await pickBankingFile();
+                  if (!file) {
+                    return;
+                  }
+                  setBankingFile(file);
+                }}
+              >
+                <Text style={styles.secondaryBtnText}>Choose file</Text>
+              </TouchableOpacity>
+              {bankingFile ? (
+                <Text style={styles.metaText}>File: {bankingFile.name}</Text>
+              ) : null}
+            </View>
+            <View style={styles.bankingSplitBlock}>
+              <Text style={styles.metaText}>Paste data</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Ctrl+V..."
+                placeholderTextColor="#6f7f96"
+                value={bankingPaste}
+                onChangeText={setBankingPaste}
+                multiline
+              />
+            </View>
+          </View>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={handleBankingPreview}
+              disabled={bankingPreviewing}
+            >
+              <Text style={styles.secondaryBtnText}>
+                {bankingPreviewing ? "Previewing..." : "Preview"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={handleBankingCommit}
+              disabled={bankingImporting}
+            >
+              <Text style={styles.primaryText}>
+                {bankingImporting ? "Importing..." : "Import"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {bankingError ? <Text style={styles.error}>{bankingError}</Text> : null}
+          {bankingMessage ? (
+            <Text style={styles.message}>{bankingMessage}</Text>
+          ) : null}
+        </View>
+
+        {bankingPreview ? (
+          <View style={styles.importCard}>
+            <View style={styles.importHeader}>
+              <View>
+                <Text style={styles.importTitle}>Preview</Text>
+                <Text style={styles.subtitle}>{bankingPreview.source_file}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={() => setBankingShowMapping((value) => !value)}
+              >
+                <Text style={styles.secondaryBtnText}>
+                  {bankingShowMapping ? "Hide mapping" : "Edit mapping"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {bankingPreview.warnings?.length ? (
+              <View style={styles.noticeBox}>
+                <Text style={styles.noticeText}>
+                  {`Rows: ${bankingPreview.rows.length} - Valid: ${
+                    bankingPreview.rows.length -
+                    bankingPreview.warnings.length
+                  } - Skipped: ${bankingPreview.warnings.length}`}
+                </Text>
+                <TouchableOpacity
+                  style={styles.linkBtn}
+                  onPress={() => setBankingShowWarnings((value) => !value)}
+                >
+                  <Text style={styles.linkText}>
+                    {bankingShowWarnings ? "Hide details" : "Show details"}
+                  </Text>
+                </TouchableOpacity>
+                {bankingShowWarnings
+                  ? bankingPreview.warnings.map((warning, index) => (
+                      <Text
+                        style={styles.noticeText}
+                        key={`${warning}-${index}`}
+                      >
+                        {warning}
+                      </Text>
+                    ))
+                  : null}
+              </View>
+            ) : null}
+            {bankingShowMapping ? (
+              <>
+                <Text style={styles.metaText}>Column mapping</Text>
+                {bankingPreview.columns?.map((column, index) => (
+                  <View style={styles.previewRow} key={`${column}-${index}`}>
+                    <View style={styles.previewInfo}>
+                      <Text style={styles.previewTitle}>
+                        {column || `Column ${index + 1}`}
+                      </Text>
+                    </View>
+                    <CategoryPicker
+                      value={bankingMapping[index] || "ignore"}
+                      options={mappingOptions}
+                      onChange={(value) =>
+                        handleBankingMappingChange(index, value)
+                      }
+                    />
+                  </View>
+                ))}
+              </>
+            ) : null}
+            <Text style={styles.metaText}>Rows</Text>
+            {bankingPreview.rows?.slice(0, 20).map((row, index) => (
+              <View style={styles.previewRow} key={`row-${index}`}>
+                <View style={styles.previewInfo}>
+                  <Text style={styles.metaText} numberOfLines={1}>
+                    {row.cells
+                      .map((cell) => (cell === null ? "" : String(cell)))
+                      .join(" | ")}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.ignoreBtn,
+                    !row.include && styles.ignoreBtnActive
+                  ]}
+                  onPress={() => handleBankingRowToggle(index)}
+                >
+                  <Text style={styles.ignoreText}>
+                    {row.include ? "Include" : "Ignore"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        <View style={styles.importCard}>
+          <View style={styles.importHeader}>
+            <View>
+              <Text style={styles.importTitle}>Transactions summary</Text>
+              <Text style={styles.subtitle}>
+                Income, expenses, and top category.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.metricRow}>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Income</Text>
+              <Text style={styles.metricValue}>
+                {formatCurrency(bankingSummary.income)}
+              </Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Expenses</Text>
+              <Text style={styles.metricValue}>
+                {formatCurrency(bankingSummary.expenses)}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.metricRow}>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Net</Text>
+              <Text style={styles.metricValue}>
+                {formatCurrency(bankingSummary.net)}
+              </Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Top category</Text>
+              <Text style={styles.metricValue}>
+                {bankingSummary.topCategory}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.importCard}>
+          <View style={styles.importHeader}>
+            <View>
+              <Text style={styles.importTitle}>Transaction analytics</Text>
+              <Text style={styles.subtitle}>
+                Spending by category and monthly net.
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.metaText}>Spending by category</Text>
+          {bankingExpenseByCategory.length ? (
+            bankingExpenseByCategory.map((item) => {
+              const maxValue =
+                bankingExpenseByCategory[0]?.value || item.value || 1;
+              const width = Math.max(
+                6,
+                Math.round((item.value / maxValue) * 100)
+              );
+              return (
+                <View style={styles.barRow} key={`banking-cat-${item.label}`}>
+                  <Text style={styles.barLabel}>{item.label}</Text>
+                  <View style={styles.barTrack}>
+                    <View
+                      style={[
+                        styles.barFill,
+                        styles.barFillPos,
+                        { width: `${width}%` }
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.barValue}>
+                    {formatCurrency(item.value)}
+                  </Text>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.subtitle}>No chart data yet.</Text>
+          )}
+          <Text style={styles.metaText}>Monthly net</Text>
+          {bankingMonthlyNet.length ? (
+            bankingMonthlyNet.map((item) => {
+              const maxValue = Math.max(
+                ...bankingMonthlyNet.map((entry) => Math.abs(entry.net)),
+                1
+              );
+              const width = Math.max(
+                6,
+                Math.round((Math.abs(item.net) / maxValue) * 100)
+              );
+              return (
+                <View style={styles.barRow} key={`banking-month-${item.month}`}>
+                  <Text style={styles.barLabel}>{item.month}</Text>
+                  <View style={styles.barTrack}>
+                    <View
+                      style={[
+                        styles.barFill,
+                        item.net >= 0 ? styles.barFillPos : styles.barFillNeg,
+                        { width: `${width}%` }
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.barValue}>
+                    {formatCurrency(item.net)}
+                  </Text>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.subtitle}>No chart data yet.</Text>
+          )}
+        </View>
+
+        <View style={styles.importCard}>
+          <View style={styles.importHeader}>
+            <View>
+              <Text style={styles.importTitle}>Budgets</Text>
+              <Text style={styles.subtitle}>
+                Set monthly limits per category.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.bankingEditRow}>
+            <View style={styles.bankingEditBlock}>
+              <Text style={styles.metaText}>Month</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="YYYY-MM"
+                placeholderTextColor="#6f7f96"
+                value={bankingBudgetMonth}
+                onChangeText={setBankingBudgetMonth}
+              />
+            </View>
+            <View style={styles.bankingEditBlock}>
+              <Text style={styles.metaText}>Category</Text>
+              <CategoryPicker
+                value={bankingBudgetCategory || "Select"}
+                options={[
+                  "Select",
+                  ...bankingCategories.map((item) => item.name)
+                ]}
+                onChange={(value) =>
+                  setBankingBudgetCategory(value === "Select" ? "" : value)
+                }
+              />
+            </View>
+            <View style={styles.bankingEditBlock}>
+              <Text style={styles.metaText}>Amount</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="0.00"
+                placeholderTextColor="#6f7f96"
+                keyboardType="decimal-pad"
+                value={bankingBudgetAmount}
+                onChangeText={setBankingBudgetAmount}
+              />
+            </View>
+          </View>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={handleBankingBudgetSave}
+              disabled={bankingBudgetsLoading}
+            >
+              <Text style={styles.primaryText}>
+                {bankingBudgetsLoading ? "Saving..." : "Save budget"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {bankingBudgetsError ? (
+            <Text style={styles.error}>{bankingBudgetsError}</Text>
+          ) : null}
+          {bankingBudgetsLoading ? (
+            <Text style={styles.subtitle}>Loading...</Text>
+          ) : bankingBudgets.length ? (
+            bankingBudgets.map((budget) => {
+              const percentValue = Number.isFinite(budget.percent)
+                ? budget.percent
+                : 0;
+              const percent = Math.min(100, percentValue);
+              const fillStyle =
+                budget.percent >= 100
+                  ? styles.barFillDanger
+                  : budget.percent >= 90
+                  ? styles.barFillWarn
+                  : budget.percent >= 70
+                  ? styles.barFillCaution
+                  : styles.barFillPos;
+              return (
+                <View style={styles.budgetRow} key={`budget-${budget.id}`}>
+                  <View style={styles.previewInfo}>
+                    <Text style={styles.previewTitle}>{budget.category}</Text>
+                    <Text style={styles.metaText}>
+                      Spent: {formatCurrency(budget.spent)}
+                    </Text>
+                    <Text style={styles.metaText}>
+                      Budget: {formatCurrency(budget.amount)}
+                    </Text>
+                    <Text style={styles.metaText}>
+                      Remaining: {formatCurrency(budget.remaining)}
+                    </Text>
+                  </View>
+                  <View style={styles.budgetProgress}>
+                    <View style={styles.barTrack}>
+                      <View
+                        style={[styles.barFill, fillStyle, { width: `${percent}%` }]}
+                      />
+                    </View>
+                    <Text style={styles.metaText}>
+                      {percentValue.toFixed(2)}%
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.dangerBtn}
+                    onPress={() => handleBankingBudgetDelete(budget.id)}
+                  >
+                    <Text style={styles.dangerText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.subtitle}>No budgets yet.</Text>
+          )}
+        </View>
+
+        <View style={styles.importCard}>
+          <View style={styles.importHeader}>
+            <View>
+              <Text style={styles.importTitle}>Transactions</Text>
+              <Text style={styles.subtitle}>Filter and review imports.</Text>
+            </View>
+            <TouchableOpacity style={styles.dangerBtn} onPress={handleBankingClear}>
+              <Text style={styles.dangerText}>Clear</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.filterRow}>
+            <View style={styles.filterBlock}>
+              <Text style={styles.metaText}>Month</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="YYYY-MM"
+                placeholderTextColor="#6f7f96"
+                value={bankingMonth}
+                onChangeText={setBankingMonth}
+              />
+            </View>
+            <View style={styles.filterBlock}>
+              <Text style={styles.metaText}>Category</Text>
+              <CategoryPicker
+                value={bankingCategory || "All"}
+                options={categoryOptions}
+                onChange={(value) => {
+                  const next = value === "All" ? "" : value;
+                  setBankingCategory(next);
+                  setBankingSubcategory("");
+                }}
+              />
+            </View>
+            <View style={styles.filterBlock}>
+              <Text style={styles.metaText}>Subcategory</Text>
+              <CategoryPicker
+                value={bankingSubcategory || "All"}
+                options={
+                  subcategoryOptions.length
+                    ? ["All", ...subcategoryOptions]
+                    : ["All"]
+                }
+                onChange={(value) =>
+                  setBankingSubcategory(value === "All" ? "" : value)
+                }
+              />
+            </View>
+            <View style={styles.filterBlock}>
+              <Text style={styles.metaText}>Institution</Text>
+              <CategoryPicker
+                value={bankingInstitutionFilter || "All"}
+                options={institutionOptions}
+                onChange={(value) =>
+                  setBankingInstitutionFilter(value === "All" ? "" : value)
+                }
+              />
+            </View>
+          </View>
+          {bankingLoading ? <Text style={styles.subtitle}>Loading...</Text> : null}
+          {bankingError ? <Text style={styles.error}>{bankingError}</Text> : null}
+          {!bankingLoading && bankingTransactions.length === 0 ? (
+            <Text style={styles.subtitle}>No transactions yet.</Text>
+          ) : null}
+          {bankingTransactions.map((item, index) => {
+            const rowGroups = bankingCategoryGroups.some(
+              (entry) => entry.name === item.category
+            )
+              ? bankingCategoryGroups
+              : [
+                  ...bankingCategoryGroups,
+                  {
+                    name: item.category || BANKING_DEFAULT_CATEGORY,
+                    subcategories: [
+                      item.subcategory === BANKING_DEFAULT_SUBCATEGORY
+                        ? item.category || BANKING_DEFAULT_CATEGORY
+                        : item.subcategory ||
+                          item.category ||
+                          BANKING_DEFAULT_SUBCATEGORY
+                    ]
+                  }
+                ];
+            const selectedCategory = item.category || BANKING_DEFAULT_CATEGORY;
+            const normalizedSubcategory =
+              item.subcategory === BANKING_DEFAULT_SUBCATEGORY
+                ? ""
+                : item.subcategory;
+            const selectedGroup = rowGroups.find(
+              (entry) => entry.name === selectedCategory
+            );
+            const selectedSubcategory = selectedGroup?.subcategories?.includes(
+              normalizedSubcategory
+            )
+              ? normalizedSubcategory
+              : selectedGroup?.subcategories?.[0] ||
+                normalizedSubcategory ||
+                BANKING_DEFAULT_SUBCATEGORY;
+            const isUpdating = bankingUpdatingId === item.id;
+            return (
+              <View style={styles.previewBlock} key={item.id || `${item.tx_date}-${index}`}>
+                <Text style={styles.previewTitle}>
+                  {item.tx_date} - {item.institution}
+                </Text>
+                <Text style={styles.metaText}>{item.description}</Text>
+                <Text
+                  style={[
+                    styles.metaText,
+                    item.amount < 0 ? styles.negValue : styles.posValue
+                  ]}
+                >
+                  {formatCurrency(item.amount)}
+                </Text>
+                <View style={styles.bankingEditRow}>
+                  <View style={styles.bankingEditBlock}>
+                    <Text style={styles.metaText}>Category</Text>
+                    <BankingCategoryPicker
+                      value={{
+                        category: selectedCategory,
+                        subcategory: selectedSubcategory
+                      }}
+                      groups={rowGroups}
+                      onChange={(category, subcategory) => {
+                        if (isUpdating) {
+                          return;
+                        }
+                        handleBankingCategoryUpdate(item.id, category, subcategory);
+                      }}
+                    />
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </>
+    );
+  };
+
+  const renderDebts = () => (
+    <>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Debts</Text>
+        <Text style={styles.subtitle}>Track your active debts.</Text>
+      </View>
+
+      <View style={styles.importCard}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Profile age</Text>
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={handleSaveProfileAge}
+            disabled={profileAgeSaving}
+          >
+            <Text style={styles.secondaryBtnText}>
+              {profileAgeSaving ? "Saving..." : "Save age"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <TextInput
+          style={styles.input}
+          placeholder="e.g. 35"
+          placeholderTextColor="#6f7f96"
+          keyboardType="number-pad"
+          value={profileAgeInput}
+          onChangeText={setProfileAgeInput}
+        />
+        {profileAgeMessage ? <Text style={styles.message}>{profileAgeMessage}</Text> : null}
+        {profileAgeError ? <Text style={styles.error}>{profileAgeError}</Text> : null}
+      </View>
+
+      <View style={styles.importCard}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>
+            {debtEditingId ? "Edit debt" : "Add debt"}
+          </Text>
+          {debtEditingId ? (
+            <TouchableOpacity style={styles.secondaryBtn} onPress={resetDebtForm}>
+              <Text style={styles.secondaryBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <View style={styles.bankingEditRow}>
+          <View style={styles.bankingEditBlock}>
+            <Text style={styles.subtitle}>Debt name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Home loan"
+              placeholderTextColor="#6f7f96"
+              value={debtName}
+              onChangeText={setDebtName}
+            />
+          </View>
+          <View style={styles.bankingEditBlock}>
+            <Text style={styles.subtitle}>Original amount</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="0.00"
+              placeholderTextColor="#6f7f96"
+              keyboardType="decimal-pad"
+              value={debtOriginalAmount}
+              onChangeText={setDebtOriginalAmount}
+            />
+          </View>
+          <View style={styles.bankingEditBlock}>
+            <Text style={styles.subtitle}>Remaining debt</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="0.00"
+              placeholderTextColor="#6f7f96"
+              keyboardType="decimal-pad"
+              value={debtCurrentBalance}
+              onChangeText={setDebtCurrentBalance}
+            />
+          </View>
+          <View style={styles.bankingEditBlock}>
+            <Text style={styles.subtitle}>Monthly payment</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="0.00"
+              placeholderTextColor="#6f7f96"
+              keyboardType="decimal-pad"
+              value={debtMonthlyPayment}
+              onChangeText={setDebtMonthlyPayment}
+            />
+          </View>
+        </View>
+        <View style={styles.metricRow}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Paid</Text>
+            <Text style={styles.metricValue}>
+              {debtPreview.percentPaid === null
+                ? "N/A"
+                : `${debtPreview.percentPaid.toFixed(1)}%`}
+            </Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Months left</Text>
+            <Text style={styles.metricValue}>
+              {debtPreview.monthsRemaining === null
+                ? "N/A"
+                : debtPreview.monthsRemaining}
+            </Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Payoff age</Text>
+            <Text style={styles.metricValue}>
+              {debtPreview.payoffAge === null
+                ? "N/A"
+                : debtPreview.payoffAge.toFixed(1)}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={handleSaveDebt}
+            disabled={debtSaving}
+          >
+            <Text style={styles.primaryText}>
+              {debtSaving
+                ? "Saving..."
+                : debtEditingId
+                ? "Update debt"
+                : "Save debt"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {debtsMessage ? <Text style={styles.message}>{debtsMessage}</Text> : null}
+        {debtsError ? <Text style={styles.error}>{debtsError}</Text> : null}
+      </View>
+
+      <View style={styles.importCard}>
+        <Text style={styles.sectionTitle}>Debt summary</Text>
+        {debtsLoading ? (
+          <Text style={styles.subtitle}>Loading...</Text>
+        ) : debts.length ? (
+          debts.map((debt) => (
+            <View style={styles.previewBlock} key={`debt-${debt.id}`}>
+              <Text style={styles.previewTitle}>{debt.name}</Text>
+              <Text style={styles.metaText}>
+                Original: {formatCurrency(debt.original_amount)}
+              </Text>
+              <Text style={styles.metaText}>
+                Remaining debt: {formatCurrency(debt.current_balance)}
+              </Text>
+              <Text style={styles.metaText}>
+                Monthly: {formatCurrency(debt.monthly_payment)}
+              </Text>
+              <Text style={styles.metaText}>
+                Paid: {debt.percent_paid.toFixed(1)}%
+              </Text>
+              <Text style={styles.metaText}>
+                Months left:{" "}
+                {debt.months_remaining === null ? "N/A" : debt.months_remaining}
+              </Text>
+              <Text style={styles.metaText}>
+                Payoff age:{" "}
+                {debt.payoff_age === null ? "N/A" : debt.payoff_age.toFixed(1)}
+              </Text>
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={styles.secondaryBtn}
+                  onPress={() => handleEditDebt(debt)}
+                >
+                  <Text style={styles.secondaryBtnText}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.dangerBtn}
+                  onPress={() => handleDeleteDebt(debt.id)}
+                >
+                  <Text style={styles.dangerText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.subtitle}>{debtsError || "No debts yet."}</Text>
+        )}
+      </View>
+    </>
   );
+
+  const renderGoals = () => {
+    const goal = goals.find((item) => item.id === activeGoalId) || goals[0];
+    const formatStatus = (status) => {
+      if (!status || status === "ok") {
+        return null;
+      }
+      if (status === "missing") {
+        return "Missing target";
+      }
+      if (status === "imp") {
+        return "Impossible";
+      }
+      if (status === "achieved") {
+        return "FIRE achieved";
+      }
+      return status;
+    };
+    const formatPercentValue = (value) => {
+      if (value === null || value === undefined || Number.isNaN(value)) {
+        return "N/A";
+      }
+      return `${Number(value).toFixed(2)}%`;
+    };
+    const formatCoast = (metrics) => {
+      if (!metrics) {
+        return "N/A";
+      }
+      return (
+        formatStatus(metrics.coast_status) ||
+        (metrics.coast_years !== null ? `${metrics.coast_years.toFixed(1)}y` : "N/A")
+      );
+    };
+    const formatSimulationCoast = (metrics) => {
+      if (!metrics) {
+        return "N/A";
+      }
+      return (
+        formatStatus(metrics.coast_status) ||
+        (metrics.coast_years !== null ? `${metrics.coast_years.toFixed(1)}y` : "N/A")
+      );
+    };
+    const formatFire = (metrics) => {
+      if (!metrics) {
+        return "N/A";
+      }
+      return (
+        formatStatus(metrics.fire_status) ||
+        (metrics.fire_years !== null
+          ? `FIRE in ${Math.floor(metrics.fire_years)}y ${metrics.fire_months ?? 0}m`
+          : "N/A")
+      );
+    };
+    const buildPath = (projection, key, maxValue) => {
+      if (!projection.length) {
+        return "";
+      }
+      const lastIndex = projection.length - 1;
+      let path = "";
+      let started = false;
+      projection.forEach((item, index) => {
+        const value =
+          key === "with_contrib"
+            ? item.with_contrib
+            : key === "without_contrib"
+              ? item.without_contrib
+              : item.coast_target;
+        if (value === null || !Number.isFinite(value)) {
+          started = false;
+          return;
+        }
+        const x = lastIndex === 0 ? 0 : (index / lastIndex) * 100;
+        const y = 100 - (value / maxValue) * 100;
+        path += `${started ? "L" : "M"} ${x} ${y} `;
+        started = true;
+      });
+      return path.trim();
+    };
+    const buildChart = (projection, metrics) => {
+      const maxValue = Math.max(
+        1,
+        ...projection.map((item) => item.with_contrib || 0),
+        ...projection.map((item) => item.without_contrib || 0),
+        ...projection.map((item) => item.coast_target || 0),
+        metrics?.fire_target || 0
+      );
+      const lastYear = projection.length ? projection[projection.length - 1].year : 0;
+      const startValue = projection.length
+        ? projection[0].age ?? projection[0].year
+        : 0;
+      const endValue = projection.length
+        ? projection[projection.length - 1].age ?? projection[projection.length - 1].year
+        : 0;
+      const usesAge = projection.length ? projection[0].age !== undefined : false;
+      const lastIndex = projection.length - 1;
+      let coastMarkerX = null;
+      let coastMarkerLabel = null;
+      if (projection.length > 1) {
+        for (let i = 0; i < projection.length; i += 1) {
+          const point = projection[i];
+          if (
+            point.without_contrib !== null &&
+            point.coast_target !== null &&
+            point.without_contrib >= point.coast_target
+          ) {
+            coastMarkerX = lastIndex === 0 ? 0 : (i / lastIndex) * 100;
+            const labelValue = point.age ?? point.year;
+            if (labelValue !== undefined && labelValue !== null) {
+              coastMarkerLabel = Number(labelValue).toFixed(0);
+            }
+            break;
+          }
+        }
+      }
+      return {
+        maxValue,
+        lastYear,
+        fireTarget: metrics?.fire_target || null,
+        withPath: buildPath(projection, "with_contrib", maxValue),
+        withoutPath: buildPath(projection, "without_contrib", maxValue),
+        coastPath: buildPath(projection, "coast_target", maxValue),
+        startValue,
+        endValue,
+        usesAge,
+        coastMarkerX,
+        coastMarkerLabel
+      };
+    };
+    const portfolioChart = buildChart(goalProjection, goalMetrics);
+    const simulationChart = buildChart(simulationProjection, simulationMetrics);
+    const coastLabel = formatCoast(goalMetrics);
+    const fireLabel = formatFire(goalMetrics);
+    const simulationCoastLabel = formatSimulationCoast(simulationMetrics);
+
+    return (
+      <View style={styles.section}>
+        <View style={styles.importCard}>
+          <Text style={styles.sectionTitle}>MyGoals</Text>
+          <Text style={styles.subtitle}>Plan your FIRE journey.</Text>
+          <View style={styles.goalRow}>
+            <TextInput
+              style={styles.input}
+              placeholder="New goal name"
+              placeholderTextColor="#6f7f96"
+              value={goalNameInput}
+              onChangeText={setGoalNameInput}
+            />
+            <TouchableOpacity style={styles.secondaryBtn} onPress={handleCreateGoal}>
+              <Text style={styles.secondaryBtnText}>Add goal</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={goalViewMode === "simulation" ? styles.primaryBtn : styles.secondaryBtn}
+              onPress={() =>
+                setGoalViewMode((prev) => (prev === "simulation" ? "portfolio" : "simulation"))
+              }
+            >
+              <Text
+                style={
+                  goalViewMode === "simulation" ? styles.primaryText : styles.secondaryBtnText
+                }
+              >
+                Simulation
+              </Text>
+            </TouchableOpacity>
+            {goal && !goal.is_default ? (
+              <TouchableOpacity style={styles.dangerBtn} onPress={handleDeleteGoal}>
+                <Text style={styles.dangerText}>Delete</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.goalTabs}>
+          {goals.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={[
+                styles.goalTab,
+                item.id === goal?.id && styles.goalTabActive
+              ]}
+              onPress={() => setActiveGoalId(item.id)}
+            >
+              <Text
+                style={[
+                  styles.goalTabText,
+                  item.id === goal?.id && styles.goalTabTextActive
+                ]}
+              >
+                {item.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {goalsMessage ? <Text style={styles.message}>{goalsMessage}</Text> : null}
+        {goalsError ? <Text style={styles.error}>{goalsError}</Text> : null}
+
+        {goalViewMode === "portfolio" ? (
+          <>
+            <View style={styles.importCard}>
+              <View style={styles.importHeader}>
+                <View>
+                  <Text style={styles.importTitle}>Portfolio FIRE</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Based on your contribution history.
+                  </Text>
+                </View>
+              </View>
+              {goal && !goal.is_default ? (
+                <View style={styles.goalRow}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Rename goal"
+                    placeholderTextColor="#6f7f96"
+                    value={goalRenameInput}
+                    onChangeText={setGoalRenameInput}
+                  />
+                  <TouchableOpacity style={styles.secondaryBtn} onPress={handleRenameGoal}>
+                    <Text style={styles.secondaryBtnText}>Rename</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.dangerBtn} onPress={handleDeleteGoal}>
+                    <Text style={styles.dangerText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              <View style={styles.field}>
+                <Text style={styles.label}>Start date</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#6f7f96"
+                  value={goalForm.start_date}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, start_date: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Duration (years)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.duration_years}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, duration_years: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Expected portfolio % gains</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.sp500_return}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, sp500_return: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Desired monthly amount</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.desired_monthly}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, desired_monthly: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Planned monthly contribution</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.planned_monthly}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, planned_monthly: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Value invested</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.initial_investment}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, initial_investment: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Safe withdrawal rate (%)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.withdrawal_rate}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, withdrawal_rate: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Initial investment</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.initial_investment}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, initial_investment: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Return method</Text>
+                <View style={styles.goalToggleRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.goalToggleBtn,
+                      goalForm.return_method === "cagr" && styles.goalToggleActive
+                    ]}
+                    onPress={() =>
+                      setGoalForm((prev) => ({ ...prev, return_method: "cagr" }))
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.goalToggleText,
+                        goalForm.return_method === "cagr" && styles.goalToggleTextActive
+                      ]}
+                    >
+                      CAGR
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.goalToggleBtn,
+                      goalForm.return_method === "xirr" && styles.goalToggleActive
+                    ]}
+                    onPress={() =>
+                      setGoalForm((prev) => ({ ...prev, return_method: "xirr" }))
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.goalToggleText,
+                        goalForm.return_method === "xirr" && styles.goalToggleTextActive
+                      ]}
+                    >
+                      XIRR
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>ECB inflation (10Y avg)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.portfolio_inflation_rate}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, portfolio_inflation_rate: value }))
+                  }
+                />
+              </View>
+              <View style={styles.buttonRow}>
+                <TouchableOpacity style={styles.primaryBtn} onPress={handleSaveGoalInputs}>
+                  <Text style={styles.primaryText}>Save inputs</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+        <View style={styles.importCard}>
+          <Text style={styles.sectionTitle}>Portfolio results</Text>
+          {goalMetrics ? (
+            <View style={styles.metricRow}>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Years elapsed</Text>
+                <Text style={styles.metricValue}>
+                  {goalMetrics.years_elapsed.toFixed(1)}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Years remaining</Text>
+                <Text style={styles.metricValue}>
+                  {goalMetrics.years_remaining.toFixed(1)}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Avg contribution</Text>
+                <Text style={styles.metricValue}>
+                  {formatCurrency(goalMetrics.avg_monthly)}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <Text style={styles.subtitle}>No goal data yet.</Text>
+          )}
+          {goalMetrics ? (
+            <View style={styles.metricRow}>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Invested</Text>
+                <Text style={styles.metricValue}>
+                  {formatCurrency(goalMetrics.invested_total)}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Return</Text>
+                <Text style={styles.metricValue}>
+                  {goalMetrics.assumption_return === null
+                    ? goalMetrics.return_rate === null
+                      ? "N/A"
+                      : `${goalMetrics.return_rate.toFixed(2)}%`
+                    : `${goalMetrics.assumption_return.toFixed(2)}%`}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>XIRR/CAGR result</Text>
+                <Text style={styles.metricValue}>
+                  {goalMetrics.return_rate === null
+                    ? "N/A"
+                    : `${goalMetrics.return_rate.toFixed(2)}%`}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>FIRE target</Text>
+                <Text style={styles.metricValue}>
+                  {goalMetrics.fire_target === null
+                    ? "N/A"
+                    : formatCurrency(goalMetrics.fire_target)}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+          {goalMetrics ? (
+            <View style={styles.metricRow}>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Coast FIRE number</Text>
+                <Text style={styles.metricValue}>
+                  {goalMetrics.coast_target === null
+                    ? "N/A"
+                    : formatCurrency(goalMetrics.coast_target)}
+                </Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Years to Coast FIRE</Text>
+                <Text style={styles.metricValue}>{coastLabel}</Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>FIRE timing</Text>
+                <Text style={styles.metricValue}>{fireLabel}</Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.chartCard}>
+          <View style={styles.chartHeader}>
+            <Text style={styles.chartTitle}>Portfolio FIRE projection</Text>
+            <Text style={styles.chartSubtitle}>Based on average contributions.</Text>
+          </View>
+            {goalProjection.length ? (
+              <>
+                <View style={styles.goalChartBody}>
+                  <View style={styles.goalChartAxis}>
+                    <Text style={styles.goalAxisText}>
+                      {formatAxisCurrency(portfolioChart.maxValue)}
+                    </Text>
+                    <Text style={styles.goalAxisText}>
+                      {formatAxisCurrency(portfolioChart.maxValue / 2)}
+                    </Text>
+                    <Text style={styles.goalAxisText}>{formatAxisCurrency(0)}</Text>
+                    <Text style={styles.goalAxisLabel}>
+                      Value ({activePortfolio?.currency || "EUR"})
+                    </Text>
+                  </View>
+                  <View style={styles.goalChartPlot}>
+                    <Svg viewBox="0 0 100 100" width="100%" height={160}>
+                      {portfolioChart.fireTarget ? (
+                        <Line
+                          x1="0"
+                          y1={100 - (portfolioChart.fireTarget / portfolioChart.maxValue) * 100}
+                          x2="100"
+                          y2={100 - (portfolioChart.fireTarget / portfolioChart.maxValue) * 100}
+                          stroke="#ff6b6b"
+                          strokeWidth="0.8"
+                        />
+                      ) : null}
+                      {portfolioChart.coastMarkerX !== null ? (
+                        <>
+                          <Line
+                            x1={portfolioChart.coastMarkerX}
+                            y1="0"
+                            x2={portfolioChart.coastMarkerX}
+                            y2="100"
+                            stroke="#4ea1ff"
+                            strokeDasharray="2 2"
+                            strokeWidth="0.8"
+                          />
+                          {portfolioChart.coastMarkerLabel ? (
+                            <SvgText
+                              x={portfolioChart.coastMarkerX}
+                              y="98"
+                              fill="#9aa9bf"
+                              fontSize="4"
+                              textAnchor="middle"
+                            >
+                              {portfolioChart.coastMarkerLabel}
+                            </SvgText>
+                          ) : null}
+                        </>
+                      ) : null}
+                      {portfolioChart.coastPath ? (
+                        <Path
+                          d={portfolioChart.coastPath}
+                          stroke="#4ea1ff"
+                          strokeDasharray="4 3"
+                          strokeWidth={1.1}
+                          fill="none"
+                        />
+                      ) : null}
+                      {portfolioChart.withoutPath ? (
+                        <Path
+                          d={portfolioChart.withoutPath}
+                          stroke="#2ad68d"
+                          strokeWidth={1.4}
+                          fill="none"
+                        />
+                      ) : null}
+                      {portfolioChart.withPath ? (
+                        <Path
+                          d={portfolioChart.withPath}
+                          stroke="#9aa9bf"
+                          strokeWidth={1.1}
+                          fill="none"
+                        />
+                      ) : null}
+                    </Svg>
+                  </View>
+                </View>
+                <View style={styles.goalChartXAxis}>
+                  <Text style={styles.goalAxisText}>{portfolioChart.startValue}</Text>
+                  <Text style={styles.goalAxisText}>{portfolioChart.endValue}</Text>
+                </View>
+                <Text style={styles.goalXAxisLabel}>
+                  {portfolioChart.usesAge ? "Age (years)" : "Years"}
+                </Text>
+                <View style={styles.goalChartLegend}>
+                  <View style={styles.goalLegendItem}>
+                    <View
+                      style={[styles.goalLegendDot, { backgroundColor: "#9aa9bf" }]}
+                    />
+                    <Text style={styles.goalLegendText}>
+                      Net worth with continued contributions
+                    </Text>
+                  </View>
+                  <View style={styles.goalLegendItem}>
+                    <View
+                      style={[styles.goalLegendDot, { backgroundColor: "#2ad68d" }]}
+                    />
+                    <Text style={styles.goalLegendText}>
+                      Net worth with no contributions after Coast FIRE milestone
+                    </Text>
+                  </View>
+                  <View style={styles.goalLegendItem}>
+                    <View
+                      style={[styles.goalLegendDot, { backgroundColor: "#4ea1ff" }]}
+                    />
+                    <Text style={styles.goalLegendText}>Coast FIRE number</Text>
+                  </View>
+                  <View style={styles.goalLegendItem}>
+                    <View
+                      style={[styles.goalLegendDot, { backgroundColor: "#ff6b6b" }]}
+                    />
+                    <Text style={styles.goalLegendText}>FIRE number</Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <Text style={styles.subtitle}>No projection data yet.</Text>
+            )}
+        </View>
+          </>
+        ) : null}
+
+        {goalViewMode === "simulation" ? (
+          <>
+            <View style={styles.importCard}>
+              <Text style={styles.sectionTitle}>FIRE Simulation Playground</Text>
+              <Text style={styles.subtitle}>Adjust assumptions to simulate scenarios.</Text>
+              <View style={styles.field}>
+                <Text style={styles.label}>Current age</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_current_age}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, simulation_current_age: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Retirement age</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_retirement_age}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, simulation_retirement_age: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Annual spending in retirement</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_annual_spending}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, simulation_annual_spending: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Current invested assets</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_current_assets}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, simulation_current_assets: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Monthly contribution</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_monthly_contribution}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({
+                      ...prev,
+                      simulation_monthly_contribution: value
+                    }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Investment rate of return (%)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_return_rate}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, simulation_return_rate: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Inflation rate (%)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_inflation_rate}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, simulation_inflation_rate: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Safe withdrawal rate (%)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_swr}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, simulation_swr: value }))
+                  }
+                />
+              </View>
+              <View style={styles.buttonRow}>
+                <TouchableOpacity style={styles.primaryBtn} onPress={handleSaveGoalInputs}>
+                  <Text style={styles.primaryText}>Save inputs</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.importCard}>
+              <Text style={styles.sectionTitle}>Simulation results</Text>
+              {simulationMetrics ? (
+                <>
+                  <View style={styles.metricRow}>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Years to retire</Text>
+                      <Text style={styles.metricValue}>
+                        {simulationMetrics.years_to_retire.toFixed(1)}
+                      </Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Annual spending</Text>
+                      <Text style={styles.metricValue}>
+                        {formatCurrency(simulationMetrics.annual_spending)}
+                      </Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Current assets</Text>
+                      <Text style={styles.metricValue}>
+                        {formatCurrency(simulationMetrics.current_assets)}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.metricRow}>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Monthly contribution</Text>
+                      <Text style={styles.metricValue}>
+                        {formatCurrency(simulationMetrics.monthly_contribution)}
+                      </Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Investment return</Text>
+                      <Text style={styles.metricValue}>
+                        {formatPercentValue(simulationMetrics.investment_return)}
+                      </Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Inflation-adjusted return</Text>
+                      <Text style={styles.metricValue}>
+                        {formatPercentValue(simulationMetrics.adjusted_return)}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.metricRow}>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>FIRE target</Text>
+                      <Text style={styles.metricValue}>
+                        {simulationMetrics.fire_target === null
+                          ? "N/A"
+                          : formatCurrency(simulationMetrics.fire_target)}
+                      </Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Coast FIRE number</Text>
+                      <Text style={styles.metricValue}>
+                        {simulationMetrics.coast_target === null
+                          ? "N/A"
+                          : formatCurrency(simulationMetrics.coast_target)}
+                      </Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Coast status</Text>
+                      <Text style={styles.metricValue}>{simulationCoastLabel}</Text>
+                    </View>
+                  </View>
+                </>
+              ) : (
+                <Text style={styles.subtitle}>No simulation data yet.</Text>
+              )}
+            </View>
+
+            <View style={styles.chartCard}>
+              <View style={styles.chartHeader}>
+                <Text style={styles.chartTitle}>Simulation projection</Text>
+                <Text style={styles.chartSubtitle}>
+                  Based on retirement age and inflation-adjusted returns.
+                </Text>
+              </View>
+              {simulationProjection.length ? (
+                <>
+                  <View style={styles.goalChartBody}>
+                    <View style={styles.goalChartAxis}>
+                      <Text style={styles.goalAxisText}>
+                        {formatAxisCurrency(simulationChart.maxValue)}
+                      </Text>
+                      <Text style={styles.goalAxisText}>
+                        {formatAxisCurrency(simulationChart.maxValue / 2)}
+                      </Text>
+                      <Text style={styles.goalAxisText}>{formatAxisCurrency(0)}</Text>
+                      <Text style={styles.goalAxisLabel}>
+                        Value ({activePortfolio?.currency || "EUR"})
+                      </Text>
+                    </View>
+                    <View style={styles.goalChartPlot}>
+                    <Svg viewBox="0 0 100 100" width="100%" height={160}>
+                      {simulationChart.fireTarget ? (
+                        <Line
+                          x1="0"
+                          y1={
+                              100 -
+                              (simulationChart.fireTarget / simulationChart.maxValue) * 100
+                            }
+                          x2="100"
+                          y2={
+                              100 -
+                              (simulationChart.fireTarget / simulationChart.maxValue) * 100
+                            }
+                          stroke="#ff6b6b"
+                          strokeWidth="0.8"
+                        />
+                      ) : null}
+                      {simulationChart.coastMarkerX !== null ? (
+                        <>
+                          <Line
+                            x1={simulationChart.coastMarkerX}
+                            y1="0"
+                            x2={simulationChart.coastMarkerX}
+                            y2="100"
+                            stroke="#4ea1ff"
+                            strokeDasharray="2 2"
+                            strokeWidth="0.8"
+                          />
+                          {simulationChart.coastMarkerLabel ? (
+                            <SvgText
+                              x={simulationChart.coastMarkerX}
+                              y="98"
+                              fill="#9aa9bf"
+                              fontSize="4"
+                              textAnchor="middle"
+                            >
+                              {simulationChart.coastMarkerLabel}
+                            </SvgText>
+                          ) : null}
+                        </>
+                      ) : null}
+                      {simulationChart.coastPath ? (
+                        <Path
+                          d={simulationChart.coastPath}
+                          stroke="#4ea1ff"
+                          strokeDasharray="4 3"
+                            strokeWidth={1.1}
+                            fill="none"
+                          />
+                        ) : null}
+                        {simulationChart.withoutPath ? (
+                          <Path
+                            d={simulationChart.withoutPath}
+                            stroke="#2ad68d"
+                            strokeWidth={1.4}
+                            fill="none"
+                          />
+                        ) : null}
+                        {simulationChart.withPath ? (
+                          <Path
+                            d={simulationChart.withPath}
+                            stroke="#9aa9bf"
+                            strokeWidth={1.1}
+                            fill="none"
+                          />
+                        ) : null}
+                      </Svg>
+                    </View>
+                  </View>
+                  <View style={styles.goalChartXAxis}>
+                    <Text style={styles.goalAxisText}>{simulationChart.startValue}</Text>
+                    <Text style={styles.goalAxisText}>{simulationChart.endValue}</Text>
+                  </View>
+                  <Text style={styles.goalXAxisLabel}>
+                    {simulationChart.usesAge ? "Age (years)" : "Years"}
+                  </Text>
+                  <View style={styles.goalChartLegend}>
+                    <View style={styles.goalLegendItem}>
+                      <View
+                        style={[styles.goalLegendDot, { backgroundColor: "#9aa9bf" }]}
+                      />
+                      <Text style={styles.goalLegendText}>
+                        Net worth with continued contributions
+                      </Text>
+                    </View>
+                    <View style={styles.goalLegendItem}>
+                      <View
+                        style={[styles.goalLegendDot, { backgroundColor: "#2ad68d" }]}
+                      />
+                      <Text style={styles.goalLegendText}>
+                        Net worth with no contributions after Coast FIRE milestone
+                      </Text>
+                    </View>
+                    <View style={styles.goalLegendItem}>
+                      <View
+                        style={[styles.goalLegendDot, { backgroundColor: "#4ea1ff" }]}
+                      />
+                      <Text style={styles.goalLegendText}>Coast FIRE number</Text>
+                    </View>
+                    <View style={styles.goalLegendItem}>
+                      <View
+                        style={[styles.goalLegendDot, { backgroundColor: "#ff6b6b" }]}
+                      />
+                      <Text style={styles.goalLegendText}>FIRE number</Text>
+                    </View>
+                  </View>
+                </>
+              ) : (
+                <Text style={styles.subtitle}>No projection data yet.</Text>
+              )}
+            </View>
+          </>
+        ) : null}
+
+        {goalViewMode === "portfolio" ? (
+          <View style={styles.importCard}>
+            <Text style={styles.sectionTitle}>Contributions</Text>
+            <View style={styles.field}>
+              <Text style={styles.label}>Date</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#6f7f96"
+                value={goalContributionDate}
+                onChangeText={setGoalContributionDate}
+              />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>Amount</Text>
+              <TextInput
+                style={styles.input}
+                value={goalContributionAmount}
+                onChangeText={setGoalContributionAmount}
+              />
+            </View>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={handleAddGoalContribution}
+              >
+                <Text style={styles.primaryText}>Add contribution</Text>
+              </TouchableOpacity>
+            </View>
+            {goalContributions.length ? (
+              goalContributions.map((item) => (
+                <View style={styles.previewRow} key={`goal-${item.id}`}>
+                  <View>
+                    <Text style={styles.previewTitle}>{item.contribution_date}</Text>
+                    <Text style={styles.metaText}>{formatCurrency(item.amount)}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.dangerBtn}
+                    onPress={() => handleDeleteGoalContribution(item.id)}
+                  >
+                    <Text style={styles.dangerText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.subtitle}>No contributions yet.</Text>
+            )}
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
+  const hasPortfolios = portfolios.length > 0;
+  const handleLockedTab = () => {
+    Alert.alert("Create a portfolio first.");
+  };
 
   const renderCategories = () => {
     if (!activePortfolio) {
@@ -3510,7 +6808,12 @@ export default function App() {
                     Invested: {formatCurrency(invested)}
                   </Text>
                   <Text style={styles.metaText}>
-                    Profit: {formatCurrency(interests)}
+                    Profit:{" "}
+                    <Text
+                      style={interests >= 0 ? styles.posValue : styles.negValue}
+                    >
+                      {formatCurrency(interests)}
+                    </Text>
                   </Text>
                 </View>
               );
@@ -3573,7 +6876,14 @@ export default function App() {
                 <Text style={styles.metaText}>
                   Invested: {formatCurrency(item.invested)}
                 </Text>
-                <Text style={styles.metaText}>Profit: {formatCurrency(item.gains)}</Text>
+                <Text style={styles.metaText}>
+                  Profit:{" "}
+                  <Text
+                    style={item.gains >= 0 ? styles.posValue : styles.negValue}
+                  >
+                    {formatCurrency(item.gains)}
+                  </Text>
+                </Text>
               </View>
               <CategoryPicker
                 value={item.category}
@@ -3663,7 +6973,17 @@ export default function App() {
           <Text style={styles.title}>MyFAInance Mobile</Text>
           <Text style={styles.subtitle}>
             {mode === "home"
-              ? "MyPortfolios overview"
+              ? homeTab === "cockpit"
+                ? "Cockpit Overview"
+                : homeTab === "debts"
+                ? "Debts"
+                : homeTab === "investments"
+                ? "Investments"
+                : homeTab === "banking"
+                ? "Banking Transactions"
+                : homeTab === "goals"
+                ? "MyGoals"
+                : "MyPortfolios overview"
               : "Sign in to access your portfolio."}
           </Text>
 
@@ -3713,6 +7033,22 @@ export default function App() {
                 <TouchableOpacity
                   style={[
                     styles.tabButton,
+                    homeTab === "cockpit" && styles.tabButtonActive
+                  ]}
+                  onPress={() => setHomeTab("cockpit")}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      homeTab === "cockpit" && styles.tabTextActive
+                    ]}
+                  >
+                    Cockpit Overview
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.tabButton,
                     homeTab === "portfolios" && styles.tabButtonActive
                   ]}
                   onPress={() => setHomeTab("portfolios")}
@@ -3729,17 +7065,41 @@ export default function App() {
                 <TouchableOpacity
                   style={[
                     styles.tabButton,
-                    homeTab === "investments" && styles.tabButtonActive
+                    homeTab === "investments" && styles.tabButtonActive,
+                    !hasPortfolios && styles.tabButtonDisabled
                   ]}
-                  onPress={() => setHomeTab("investments")}
+                  onPress={() =>
+                    hasPortfolios ? setHomeTab("investments") : handleLockedTab()
+                  }
                 >
                   <Text
                     style={[
                       styles.tabText,
-                      homeTab === "investments" && styles.tabTextActive
+                      homeTab === "investments" && styles.tabTextActive,
+                      !hasPortfolios && styles.tabTextDisabled
                     ]}
                   >
                     Investments
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.tabButton,
+                    homeTab === "banking" && styles.tabButtonActive,
+                    !hasPortfolios && styles.tabButtonDisabled
+                  ]}
+                  onPress={() =>
+                    hasPortfolios ? setHomeTab("banking") : handleLockedTab()
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      homeTab === "banking" && styles.tabTextActive,
+                      !hasPortfolios && styles.tabTextDisabled
+                    ]}
+                  >
+                    Banking Transactions
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -3758,11 +7118,37 @@ export default function App() {
                     MyGoals
                   </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.tabButton,
+                    homeTab === "debts" && styles.tabButtonActive,
+                    !hasPortfolios && styles.tabButtonDisabled
+                  ]}
+                  onPress={() =>
+                    hasPortfolios ? setHomeTab("debts") : handleLockedTab()
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      homeTab === "debts" && styles.tabTextActive,
+                      !hasPortfolios && styles.tabTextDisabled
+                    ]}
+                  >
+                    Debts
+                  </Text>
+                </TouchableOpacity>
               </View>
-              {homeTab === "portfolios"
+              {homeTab === "cockpit"
+                ? renderCockpit()
+                : homeTab === "portfolios"
                 ? renderOverview()
                 : homeTab === "investments"
                 ? renderHoldings()
+                : homeTab === "banking"
+                ? renderBanking()
+                : homeTab === "debts"
+                ? renderDebts()
                 : renderGoals()}
             </>
           )}
@@ -4033,7 +7419,14 @@ export default function App() {
                         ) : null}
                         {entry.gains !== null && entry.gains !== undefined ? (
                           <Text style={styles.metaText}>
-                            Gains: {formatSigned(entry.gains)}
+                            Gains:{" "}
+                            <Text
+                              style={
+                                entry.gains >= 0 ? styles.posValue : styles.negValue
+                              }
+                            >
+                              {formatSigned(entry.gains)}
+                            </Text>
                           </Text>
                         ) : null}
                       </View>
@@ -4087,6 +7480,59 @@ function CategoryPicker({ value, options, onChange }) {
   );
 }
 
+function BankingCategoryPicker({ value, groups, onChange }) {
+  const [open, setOpen] = useState(false);
+  const displayValue = value?.category
+    ? value.subcategory && value.subcategory !== value.category
+      ? `${value.category} - ${value.subcategory}`
+      : value.category
+    : "Select category";
+
+  return (
+    <View>
+      <TouchableOpacity style={styles.selectBtn} onPress={() => setOpen(true)}>
+        <Text style={styles.selectText}>{displayValue}</Text>
+      </TouchableOpacity>
+      <Modal transparent visible={open} animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setOpen(false)}
+          />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Select category</Text>
+            <ScrollView style={styles.modalList}>
+              {groups.map((group) => {
+                const options = group.subcategories?.length
+                  ? group.subcategories
+                  : [group.name];
+                return (
+                  <View key={group.name} style={styles.modalGroup}>
+                    <Text style={styles.modalGroupTitle}>{group.name}</Text>
+                    {options.map((option) => (
+                      <TouchableOpacity
+                        key={`${group.name}-${option}`}
+                        style={styles.modalOption}
+                        onPress={() => {
+                          onChange(group.name, option);
+                          setOpen(false);
+                        }}
+                      >
+                        <Text style={styles.modalOptionText}>{option}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -4124,6 +7570,19 @@ const styles = StyleSheet.create({
     color: "#e5eefb",
     paddingHorizontal: 12,
     paddingVertical: 10
+  },
+  readonlyValue: {
+    backgroundColor: "rgba(15, 23, 40, 0.7)",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    color: "#e5eefb",
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  textArea: {
+    minHeight: 90,
+    textAlignVertical: "top"
   },
   primaryBtn: {
     backgroundColor: "#2ad68d",
@@ -4251,6 +7710,9 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.04)"
   },
+  tabButtonDisabled: {
+    opacity: 0.45
+  },
   tabButtonActive: {
     backgroundColor: "#0f2330",
     borderColor: "#2ad68d"
@@ -4259,6 +7721,9 @@ const styles = StyleSheet.create({
     color: "#9aa9bf",
     fontSize: 12,
     fontWeight: "600"
+  },
+  tabTextDisabled: {
+    color: "#6f7f96"
   },
   tabTextActive: {
     color: "#2ad68d"
@@ -4325,6 +7790,23 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
     marginTop: 8
+  },
+  bankingSplit: {
+    gap: 12
+  },
+  bankingSplitBlock: {
+    gap: 8
+  },
+  bankingEditRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 6
+  },
+  bankingEditBlock: {
+    flex: 1,
+    minWidth: 140,
+    gap: 6
   },
   filterBlock: {
     flex: 1,
@@ -4406,6 +7888,52 @@ const styles = StyleSheet.create({
     marginTop: 8,
     gap: 6
   },
+  tagWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6
+  },
+  tagChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    gap: 6
+  },
+  tagChipActive: {
+    borderColor: "rgba(42,214,141,0.45)",
+    backgroundColor: "rgba(42,214,141,0.2)"
+  },
+  tagChipText: {
+    color: "#dfe7f3",
+    fontSize: 11,
+    fontWeight: "600"
+  },
+  tagChipTextActive: {
+    color: "#2ad68d"
+  },
+  tagRemove: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,120,120,0.6)",
+    backgroundColor: "rgba(255,120,120,0.12)"
+  },
+  tagRemoveText: {
+    color: "#ff9c9c",
+    fontWeight: "700",
+    fontSize: 12
+  },
+  tagInputRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center"
+  },
   chartCard: {
     marginTop: 6,
     backgroundColor: "#0f1728",
@@ -4445,6 +7973,65 @@ const styles = StyleSheet.create({
     padding: 10,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)"
+  },
+  goalChartBody: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "stretch",
+    backgroundColor: "rgba(7,12,24,0.6)",
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)"
+  },
+  goalChartAxis: {
+    width: 78,
+    justifyContent: "space-between"
+  },
+  goalChartPlot: {
+    flex: 1
+  },
+  goalChartXAxis: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginLeft: 78,
+    marginTop: 6
+  },
+  goalAxisText: {
+    fontSize: 11,
+    color: "#8ea0bd",
+    textAlign: "right"
+  },
+  goalAxisLabel: {
+    fontSize: 10,
+    color: "#6f7f96",
+    textAlign: "right"
+  },
+  goalXAxisLabel: {
+    fontSize: 10,
+    color: "#6f7f96",
+    marginLeft: 78,
+    marginTop: 4
+  },
+  goalChartLegend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 8
+  },
+  goalLegendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6
+  },
+  goalLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999
+  },
+  goalLegendText: {
+    fontSize: 10,
+    color: "#9aa9bf"
   },
   chartBars: {
     flexDirection: "row",
@@ -4656,6 +8243,68 @@ const styles = StyleSheet.create({
     color: "#dfe7f3",
     fontSize: 12
   },
+  modalGroup: {
+    marginBottom: 8
+  },
+  modalGroupTitle: {
+    color: "#8fa0ba",
+    fontSize: 12,
+    textTransform: "uppercase",
+    marginTop: 6
+  },
+  barRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 6
+  },
+  barLabel: {
+    flex: 1,
+    color: "#c4d0e3",
+    fontSize: 11
+  },
+  barTrack: {
+    flex: 2,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden"
+  },
+  barFill: {
+    height: "100%",
+    borderRadius: 999
+  },
+  barFillPos: {
+    backgroundColor: "#2ad68d"
+  },
+  barFillNeg: {
+    backgroundColor: "#ff9c9c"
+  },
+  barFillCaution: {
+    backgroundColor: "#f2b441"
+  },
+  barFillWarn: {
+    backgroundColor: "#ff9c9c"
+  },
+  barFillDanger: {
+    backgroundColor: "#ff6b6b"
+  },
+  barValue: {
+    color: "#9aa9bf",
+    fontSize: 11
+  },
+  budgetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)"
+  },
+  budgetProgress: {
+    flex: 1,
+    gap: 6
+  },
   detailCard: {
     backgroundColor: "#0f1728",
     borderRadius: 12,
@@ -4775,5 +8424,71 @@ const styles = StyleSheet.create({
   },
   negValue: {
     color: "#ff9c9c"
+  },
+  goalRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    alignItems: "center"
+  },
+  goalTabs: {
+    marginTop: 8
+  },
+  goalTab: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    marginRight: 8
+  },
+  goalTabActive: {
+    backgroundColor: "#2ad68d",
+    borderColor: "#2ad68d"
+  },
+  goalTabText: {
+    color: "#c7d3ea",
+    fontSize: 12,
+    fontWeight: "600"
+  },
+  goalTabTextActive: {
+    color: "#052016"
+  },
+  goalToggleRow: {
+    flexDirection: "row",
+    gap: 8
+  },
+  goalToggleBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.04)"
+  },
+  goalToggleActive: {
+    borderColor: "#2ad68d",
+    backgroundColor: "rgba(42,214,141,0.2)"
+  },
+  goalToggleText: {
+    color: "#c7d3ea",
+    fontSize: 12,
+    fontWeight: "600"
+  },
+  goalToggleTextActive: {
+    color: "#2ad68d"
+  },
+  chartHeader: {
+    gap: 4
+  },
+  chartTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#e5eefb"
+  },
+  chartSubtitle: {
+    fontSize: 11,
+    color: "#8fa0ba"
   }
 });

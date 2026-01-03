@@ -3,11 +3,14 @@ export type Language = "en" | "pt" | "es";
 export const translations = {
   en: {
     nav: {
+      cockpit: "Cockpit Overview",
       portfolios: "MyPortfolios",
       stocks: "Investments",
       transactions: "Banking Transactions",
       goals: "MyGoals",
-      management: "Portfolio Management"
+      debts: "Debts",
+      management: "Portfolio Management",
+      disabledHint: "Create a portfolio first."
     },
     actions: {
       add: "Add"
@@ -72,6 +75,11 @@ export const translations = {
         tickerPlaceholder: "Search ticker",
         all: "All"
       },
+      tableTitle: "Holdings & activity",
+      tableViews: {
+        holdings: "Holdings",
+        operations: "Operations"
+      },
       columns: {
         holding: "Holding",
         portfolio: "Portfolio",
@@ -79,7 +87,23 @@ export const translations = {
         costBasis: "Cost basis",
         currentValue: "Current value",
         totalProfit: "Total profit",
-        share: "Share in portfolio"
+        share: "Share in portfolio",
+        tags: "Tags"
+      },
+      operations: {
+        loading: "Loading operations...",
+        loadError: "Unable to load operations.",
+        empty: "No operations yet.",
+        columns: {
+          date: "Date",
+          type: "Type",
+          ticker: "Ticker",
+          description: "Description",
+          amount: "Amount",
+          source: "Source file",
+          tags: "Tags",
+          actions: "Actions"
+        }
       },
       tooltips: {
         costBasis:
@@ -102,6 +126,17 @@ export const translations = {
         saveError: "Unable to save holding details.",
         cancel: "Cancel",
         noPortfolio: "Select a portfolio first."
+      },
+      tags: {
+        label: "Tags",
+        placeholder: "Add tag",
+        add: "Add",
+        created: "Tag added.",
+        deleted: "Tag removed.",
+        required: "Tag name is required.",
+        loadError: "Unable to load tags.",
+        saveError: "Unable to save tag.",
+        deleteError: "Unable to delete tag."
       },
       chart: {
         title: "Holdings performance",
@@ -149,6 +184,74 @@ export const translations = {
         date: "Date is required.",
         shares: "Shares must be greater than 0.",
         price: "Price must be greater than 0."
+      }
+    },
+    bankings: {
+      title: "Banking Transactions",
+      subtitle: "Import and classify banking movements.",
+      clear: "Clear transactions",
+      clearing: "Clearing...",
+      clearConfirm: "Clear all imported banking transactions? This cannot be undone.",
+      clearSuccess: "Banking transactions cleared.",
+      clearError: "Unable to clear banking transactions.",
+      institution: "Institution",
+      selectInstitution: "Select...",
+      customInstitution: "Other...",
+      customInstitutionLabel: "Custom institution",
+      fileLabel: "Choose file",
+      pasteLabel: "Paste data",
+      preview: "Preview",
+      previewing: "Previewing...",
+      commit: "Import",
+      importing: "Importing...",
+      previewTitle: "Preview",
+      loading: "Loading...",
+      empty: "No transactions yet.",
+      loadError: "Unable to load transactions.",
+      noFile: "Select a file or paste data first.",
+      institutionRequired: "Institution is required.",
+      importSuccess: "Transactions imported.",
+      noSubcategory: "No subcategory",
+      summary: {
+        income: "Income",
+        expenses: "Expenses",
+        net: "Net",
+        topCategory: "Top category"
+      },
+      charts: {
+        spendByCategory: "Spending by category",
+        spendSubtitle: "Based on expenses only",
+        monthlyNet: "Monthly net",
+        monthlySubtitle: "Income minus expenses",
+        empty: "No chart data yet."
+      },
+      budgets: {
+        title: "Budgets",
+        subtitle: "Set monthly limits per category.",
+        month: "Month",
+        category: "Category",
+        categoryPlaceholder: "Select...",
+        amount: "Amount",
+        save: "Save budget",
+        delete: "Delete",
+        spent: "Spent",
+        remaining: "Remaining",
+        empty: "No budgets yet."
+      },
+      filters: {
+        month: "Month",
+        category: "Category",
+        subcategory: "Subcategory",
+        institution: "Institution",
+        all: "All"
+      },
+      columns: {
+        date: "Date",
+        description: "Description",
+        amount: "Amount",
+        balance: "Balance",
+        category: "Category",
+        institution: "Institution"
       }
     },
     imports: {
@@ -377,6 +480,195 @@ export const translations = {
         }
       }
     },
+    cockpit: {
+      title: "Cockpit Overview",
+      subtitle: "Your financial performance at a glance.",
+      performanceTitle: "Portfolio performance",
+      performanceValue: "Total portfolio value",
+      performanceDelta: "Change since start",
+      performanceTrend: "Monthly performance",
+      subPortfoliosTitle: "Sub-portfolios",
+      subPortfoliosEmpty: "No sub-portfolios yet.",
+      budgetTitle: "Monthly budget",
+      budgetStatus: "Budget status",
+      budgetSpent: "Spent",
+      budgetRemaining: "Remaining",
+      budgetEmpty: "No budgets yet.",
+      realEstateTitle: "Real estate income",
+      realEstateSubtitle: "Monthly income",
+      realEstateEmpty: "No real estate data yet.",
+      debtTitle: "Debt summary",
+      debtEmpty: "No debts tracked yet.",
+      fireTitle: "FIRE journey",
+      fireSubtitle: "Financial independence progress",
+      fireEmpty: "Set a goal in MyGoals to enable this view.",
+      empty: "Create a portfolio to unlock your cockpit."
+    },
+    debts: {
+      title: "Debts",
+      subtitle: "Track your active debts and payoff timeline.",
+      ageTitle: "Profile age",
+      ageLabel: "Current age",
+      agePlaceholder: "e.g. 35",
+      ageSave: "Save age",
+      ageSaving: "Saving...",
+      ageSaved: "Age saved.",
+      ageError: "Unable to save age.",
+      formTitle: "Add debt",
+      formEditTitle: "Edit debt",
+      name: "Debt name",
+      originalAmount: "Original amount",
+      currentBalance: "Remaining debt",
+      monthlyPayment: "Monthly payment",
+      save: "Save debt",
+      update: "Update debt",
+      cancel: "Cancel",
+      saving: "Saving...",
+      loadError: "Unable to load debts.",
+      saveError: "Unable to save debt.",
+      saveSuccess: "Debt saved.",
+      deleteError: "Unable to delete debt.",
+      deleteSuccess: "Debt deleted.",
+      deleteConfirm: "Delete this debt? This cannot be undone.",
+      delete: "Delete",
+      edit: "Edit",
+      updateSuccess: "Debt updated.",
+      empty: "No debts yet.",
+      summaryTitle: "Debt summary",
+      percentPaid: "Paid",
+      monthsRemaining: "Months remaining",
+      payoffAge: "Payoff age",
+      payoffAgeHint: "Set your age to see payoff age.",
+      na: "N/A",
+      table: {
+        debt: "Debt",
+        original: "Original",
+        balance: "Remaining debt",
+        monthly: "Monthly",
+        percent: "Paid %",
+        months: "Months left",
+        payoffAge: "Payoff age",
+        actions: "Actions"
+      }
+    },
+    goals: {
+      title: "MyGoals",
+      subtitle: "Plan your FIRE journey and long-term goals.",
+      add: "Add goal",
+      newGoalPlaceholder: "New goal name",
+      detailsTitle: "Goal details",
+      detailsSubtitle: "Adjust inputs and contributions.",
+      loading: "Loading goals...",
+      loadError: "Unable to load goals.",
+      saveError: "Unable to save goal.",
+      deleteError: "Unable to delete goal.",
+      nameRequired: "Goal name is required.",
+      created: "Goal created.",
+      updated: "Goal updated.",
+      deleted: "Goal deleted.",
+      rename: "Rename",
+      delete: "Delete",
+      deleteConfirm: "Delete this goal and all its data? This cannot be undone.",
+      inputsTitle: "Inputs",
+      resultsTitle: "Results",
+      saveInputs: "Save inputs",
+      inputError: "Fill all inputs before saving.",
+      simulation: "Simulation",
+      sections: {
+        portfolio: {
+          title: "Portfolio FIRE",
+          subtitle: "Based on your real contribution history.",
+          inputs: "Portfolio inputs",
+          results: "Portfolio results",
+          chartTitle: "Portfolio FIRE projection",
+          chartSubtitle: "Projection using average contributions and ECB inflation."
+        },
+        simulation: {
+          title: "FIRE Simulation Playground",
+          subtitle: "Adjust assumptions to explore scenarios.",
+          inputs: "Simulation inputs",
+          results: "Simulation results",
+          chartTitle: "Simulation projection",
+          chartSubtitle: "Projection based on retirement age and inflation-adjusted returns."
+        }
+      },
+        inputs: {
+          startDate: "Start date",
+          durationYears: "Duration (years)",
+          sp500: "Expected portfolio % gains",
+          desiredMonthly: "Desired monthly amount",
+          plannedMonthly: "Planned monthly contribution",
+          withdrawalRate: "Safe withdrawal rate (%)",
+          initialInvestment: "Initial investment",
+          valueInvested: "Value invested",
+          inflation: "Expected inflation (%)",
+          ecbInflation: "ECB inflation (10Y avg)",
+          returnMethod: "Return method",
+          currentAge: "Current age",
+          retirementAge: "Retirement age",
+          annualSpending: "Annual spending in retirement",
+          currentAssets: "Current invested assets",
+          monthlyContribution: "Monthly contribution",
+          investmentReturn: "Investment rate of return (%)",
+          safeWithdrawalRate: "Safe withdrawal rate (%)"
+        },
+        metrics: {
+        yearsElapsed: "Years elapsed",
+        yearsRemaining: "Years remaining",
+        avgMonthly: "Avg monthly contributions",
+        avgMonthlyPortfolio: "Avg contribution amount",
+        avgMonthlySimulation: "Planned monthly contribution",
+        investedTotal: "Value invested",
+        returnRate: "Annual return",
+        returnCalc: "XIRR/CAGR result",
+        future1000: "Future value of 1000",
+        fireTarget: "FIRE target",
+          coastTarget: "Coast FIRE number",
+          coastTime: "Years to Coast FIRE",
+          coastStatus: "Coast status",
+          fireTime: "Time to FIRE",
+          years: "years",
+          yearsToRetire: "Years to retirement",
+          annualSpending: "Annual spending",
+          currentAssets: "Current assets",
+          monthlyContribution: "Monthly contribution",
+          investmentReturn: "Investment return",
+          adjustedReturn: "Inflation-adjusted return"
+        },
+      status: {
+        missing: "Missing target",
+        impossible: "Impossible",
+        achieved: "FIRE achieved"
+      },
+      fireMessage: "FIRE in {years} years and {months} months",
+      tooltips: {
+        returnRate:
+          "Annualized return based on contributions and current value (XIRR or CAGR)."
+      },
+        chart: {
+          title: "FIRE projection",
+          subtitle: "Capital growth and FIRE targets.",
+          continuedContrib: "Net worth with continued contributions",
+          noContribAfterCoast: "Net worth with no contributions after Coast FIRE milestone",
+          coastTarget: "Coast FIRE number",
+          fireLine: "FIRE number",
+          axisValue: "Value ({currency})",
+          axisYears: "Years",
+          axisAge: "Age (years)",
+          empty: "No projection data yet."
+        },
+      contributions: {
+        title: "Contributions",
+        listTitle: "Contribution history",
+        date: "Date",
+        amount: "Amount",
+        add: "Add contribution",
+        actions: "Actions",
+        delete: "Delete",
+        empty: "No contributions yet.",
+        error: "Contribution data missing."
+      }
+    },
     summary: {
       value: "Portfolio current value",
       investedLabel: "invested",
@@ -538,11 +830,14 @@ export const translations = {
   },
   pt: {
     nav: {
+      cockpit: "Cockpit Overview",
       portfolios: "MyPortfolios",
       stocks: "Investments",
       transactions: "Banking Transactions",
       goals: "MyGoals",
-      management: "Portfolio Management"
+      debts: "Dividas",
+      management: "Portfolio Management",
+      disabledHint: "Crie um portfolio primeiro."
     },
     actions: {
       add: "Adicionar"
@@ -607,6 +902,11 @@ export const translations = {
         tickerPlaceholder: "Pesquisar ticker",
         all: "Todos"
       },
+      tableTitle: "Holdings e atividade",
+      tableViews: {
+        holdings: "Holdings",
+        operations: "Operacoes"
+      },
       columns: {
         holding: "Holding",
         portfolio: "Portfolio",
@@ -614,7 +914,23 @@ export const translations = {
         costBasis: "Cost basis",
         currentValue: "Valor atual",
         totalProfit: "Lucro total",
-        share: "Peso no portfolio"
+        share: "Peso no portfolio",
+        tags: "Tags"
+      },
+      operations: {
+        loading: "A carregar operacoes...",
+        loadError: "Nao foi possivel carregar operacoes.",
+        empty: "Sem operacoes.",
+        columns: {
+          date: "Data",
+          type: "Tipo",
+          ticker: "Ticker",
+          description: "Descricao",
+          amount: "Montante",
+          source: "Ficheiro",
+          tags: "Tags",
+          actions: "Acoes"
+        }
       },
       tooltips: {
         costBasis:
@@ -637,6 +953,17 @@ export const translations = {
         saveError: "Nao foi possivel guardar detalhes.",
         cancel: "Cancelar",
         noPortfolio: "Selecione um portfolio."
+      },
+      tags: {
+        label: "Tags",
+        placeholder: "Adicionar tag",
+        add: "Adicionar",
+        created: "Tag adicionada.",
+        deleted: "Tag removida.",
+        required: "Nome da tag obrigatorio.",
+        loadError: "Nao foi possivel carregar tags.",
+        saveError: "Nao foi possivel guardar tag.",
+        deleteError: "Nao foi possivel apagar tag."
       },
       chart: {
         title: "Performance das holdings",
@@ -684,6 +1011,75 @@ export const translations = {
         date: "Data obrigatoria.",
         shares: "Shares deve ser maior que 0.",
         price: "Preco deve ser maior que 0."
+      }
+    },
+    bankings: {
+      title: "Transacoes Bancarias",
+      subtitle: "Importe e classifique movimentos bancarios.",
+      clear: "Limpar transacoes",
+      clearing: "A limpar...",
+      clearConfirm:
+        "Limpar todas as transacoes bancarias importadas? Esta acao nao pode ser anulada.",
+      clearSuccess: "Transacoes bancarias removidas.",
+      clearError: "Nao foi possivel limpar as transacoes bancarias.",
+      institution: "Instituicao",
+      selectInstitution: "Selecionar...",
+      customInstitution: "Outra...",
+      customInstitutionLabel: "Instituicao personalizada",
+      fileLabel: "Escolher ficheiro",
+      pasteLabel: "Colar dados",
+      preview: "Pre-visualizar",
+      previewing: "A pre-visualizar...",
+      commit: "Importar",
+      importing: "A importar...",
+      previewTitle: "Pre-visualizacao",
+      loading: "A carregar...",
+      empty: "Sem transacoes.",
+      loadError: "Nao foi possivel carregar transacoes.",
+      noFile: "Escolha um ficheiro ou cole dados primeiro.",
+      institutionRequired: "A instituicao e obrigatoria.",
+      importSuccess: "Transacoes importadas.",
+      noSubcategory: "Sem subcategoria",
+      summary: {
+        income: "Receitas",
+        expenses: "Despesas",
+        net: "Saldo",
+        topCategory: "Categoria principal"
+      },
+      charts: {
+        spendByCategory: "Despesas por categoria",
+        spendSubtitle: "Baseado apenas em despesas",
+        monthlyNet: "Saldo mensal",
+        monthlySubtitle: "Receitas menos despesas",
+        empty: "Sem dados para mostrar."
+      },
+      budgets: {
+        title: "Orcamentos",
+        subtitle: "Defina limites mensais por categoria.",
+        month: "Mes",
+        category: "Categoria",
+        categoryPlaceholder: "Selecionar...",
+        amount: "Montante",
+        save: "Guardar orcamento",
+        delete: "Eliminar",
+        spent: "Gasto",
+        remaining: "Restante",
+        empty: "Sem orcamentos."
+      },
+      filters: {
+        month: "Mes",
+        category: "Categoria",
+        subcategory: "Subcategoria",
+        institution: "Instituicao",
+        all: "Todos"
+      },
+      columns: {
+        date: "Data",
+        description: "Descricao",
+        amount: "Montante",
+        balance: "Saldo",
+        category: "Categoria",
+        institution: "Instituicao"
       }
     },
     imports: {
@@ -911,6 +1307,195 @@ export const translations = {
         }
       }
     },
+    cockpit: {
+      title: "Cockpit Overview",
+      subtitle: "Resumo financeiro num relance.",
+      performanceTitle: "Desempenho do portfolio",
+      performanceValue: "Valor total do portfolio",
+      performanceDelta: "Variacao desde o inicio",
+      performanceTrend: "Desempenho mensal",
+      subPortfoliosTitle: "Sub-portfolios",
+      subPortfoliosEmpty: "Sem sub-portfolios.",
+      budgetTitle: "Orcamento mensal",
+      budgetStatus: "Estado do orcamento",
+      budgetSpent: "Gasto",
+      budgetRemaining: "Restante",
+      budgetEmpty: "Sem orcamentos.",
+      realEstateTitle: "Renda imobiliaria",
+      realEstateSubtitle: "Renda mensal",
+      realEstateEmpty: "Sem dados de imobiliario.",
+      debtTitle: "Resumo de dividas",
+      debtEmpty: "Sem dividas registadas.",
+      fireTitle: "Jornada FIRE",
+      fireSubtitle: "Progresso para independencia financeira",
+      fireEmpty: "Defina um objetivo em MyGoals.",
+      empty: "Crie um portfolio para desbloquear o cockpit."
+    },
+    debts: {
+      title: "Dividas",
+      subtitle: "Acompanhe as suas dividas ativas.",
+      ageTitle: "Idade no perfil",
+      ageLabel: "Idade atual",
+      agePlaceholder: "ex: 35",
+      ageSave: "Guardar idade",
+      ageSaving: "A guardar...",
+      ageSaved: "Idade guardada.",
+      ageError: "Nao foi possivel guardar a idade.",
+      formTitle: "Adicionar divida",
+      formEditTitle: "Editar divida",
+      name: "Nome da divida",
+      originalAmount: "Valor original",
+      currentBalance: "Divida em falta",
+      monthlyPayment: "Mensalidade",
+      save: "Guardar divida",
+      update: "Atualizar divida",
+      cancel: "Cancelar",
+      saving: "A guardar...",
+      loadError: "Nao foi possivel carregar dividas.",
+      saveError: "Nao foi possivel guardar a divida.",
+      saveSuccess: "Divida guardada.",
+      deleteError: "Nao foi possivel remover a divida.",
+      deleteSuccess: "Divida removida.",
+      deleteConfirm: "Remover esta divida? Esta acao nao pode ser desfeita.",
+      delete: "Remover",
+      edit: "Editar",
+      updateSuccess: "Divida atualizada.",
+      empty: "Sem dividas.",
+      summaryTitle: "Resumo de dividas",
+      percentPaid: "Pago",
+      monthsRemaining: "Meses restantes",
+      payoffAge: "Idade de liquidacao",
+      payoffAgeHint: "Defina a idade para calcular a idade final.",
+      na: "N/A",
+      table: {
+        debt: "Divida",
+        original: "Original",
+        balance: "Divida em falta",
+        monthly: "Mensal",
+        percent: "% pago",
+        months: "Meses restantes",
+        payoffAge: "Idade de liquidacao",
+        actions: "Acoes"
+      }
+    },
+    goals: {
+      title: "MyGoals",
+      subtitle: "Planeie o FIRE e os seus objetivos financeiros.",
+      add: "Adicionar objetivo",
+      newGoalPlaceholder: "Nome do objetivo",
+      detailsTitle: "Detalhes do objetivo",
+      detailsSubtitle: "Ajuste os inputs e os aportes.",
+      loading: "A carregar objetivos...",
+      loadError: "Nao foi possivel carregar objetivos.",
+      saveError: "Nao foi possivel guardar objetivo.",
+      deleteError: "Nao foi possivel eliminar objetivo.",
+      nameRequired: "O nome do objetivo e obrigatorio.",
+      created: "Objetivo criado.",
+      updated: "Objetivo atualizado.",
+      deleted: "Objetivo eliminado.",
+      rename: "Renomear",
+      delete: "Eliminar",
+      deleteConfirm: "Eliminar este objetivo e todos os dados? Nao pode ser revertido.",
+      inputsTitle: "Inputs",
+      resultsTitle: "Resultados",
+      saveInputs: "Guardar inputs",
+      inputError: "Preencha todos os campos antes de guardar.",
+      simulation: "Simulacao",
+      sections: {
+        portfolio: {
+          title: "Portfolio FIRE",
+          subtitle: "Baseado no historico real de aportes.",
+          inputs: "Inputs do portfolio",
+          results: "Resultados do portfolio",
+          chartTitle: "Projecao Portfolio FIRE",
+          chartSubtitle: "Projecao com media de aportes e inflacao BCE."
+        },
+        simulation: {
+          title: "FIRE Simulation Playground",
+          subtitle: "Ajuste pressupostos para simular cenarios.",
+          inputs: "Inputs de simulacao",
+          results: "Resultados da simulacao",
+          chartTitle: "Projecao simulada",
+          chartSubtitle: "Projecao baseada na idade de reforma e retorno ajustado a inflacao."
+        }
+      },
+        inputs: {
+          startDate: "Data de inicio",
+          durationYears: "Duracao (anos)",
+          sp500: "Ganho esperado do portfolio (%)",
+          desiredMonthly: "Valor mensal desejado",
+          plannedMonthly: "Aporte mensal planeado",
+          withdrawalRate: "Taxa de levantamento seguro (%)",
+          initialInvestment: "Investimento inicial",
+          valueInvested: "Valor investido",
+          inflation: "Inflacao esperada (%)",
+          ecbInflation: "Inflacao BCE (media 10 anos)",
+          returnMethod: "Metodo de rentabilidade",
+          currentAge: "Idade atual",
+          retirementAge: "Idade de reforma",
+          annualSpending: "Gasto anual na reforma",
+          currentAssets: "Ativos investidos atuais",
+          monthlyContribution: "Aporte mensal",
+          investmentReturn: "Taxa de retorno do investimento (%)",
+          safeWithdrawalRate: "Taxa de levantamento seguro (%)"
+        },
+        metrics: {
+        yearsElapsed: "Anos decorridos",
+        yearsRemaining: "Anos em falta",
+        avgMonthly: "Media mensal de aportes",
+        avgMonthlyPortfolio: "Media dos aportes",
+        avgMonthlySimulation: "Aporte mensal planeado",
+        investedTotal: "Valor investido",
+        returnRate: "Rentabilidade anual",
+        returnCalc: "Resultado XIRR/CAGR",
+        future1000: "Valor futuro de 1000",
+        fireTarget: "Patrimonio FIRE",
+          coastTarget: "Numero Coast FIRE",
+          coastTime: "Anos ate Coast FIRE",
+          coastStatus: "Estado Coast",
+          fireTime: "Tempo ate FIRE",
+          years: "anos",
+          yearsToRetire: "Anos ate reforma",
+          annualSpending: "Gasto anual",
+          currentAssets: "Ativos atuais",
+          monthlyContribution: "Aporte mensal",
+          investmentReturn: "Retorno do investimento",
+          adjustedReturn: "Retorno ajustado a inflacao"
+        },
+      status: {
+        missing: "Meta em falta",
+        impossible: "Impossivel",
+        achieved: "FIRE atingido"
+      },
+      fireMessage: "FIRE em {years} anos e {months} meses",
+      tooltips: {
+        returnRate:
+          "Rentabilidade anualizada com base nos aportes e valor atual (XIRR ou CAGR)."
+      },
+        chart: {
+          title: "Projecao FIRE",
+          subtitle: "Evolucao do capital e metas FIRE.",
+          continuedContrib: "Patrimonio com aportes continuados",
+          noContribAfterCoast: "Patrimonio sem aportes apos Coast FIRE",
+          coastTarget: "Numero Coast FIRE",
+          fireLine: "Numero FIRE",
+          axisValue: "Valor ({currency})",
+          axisYears: "Anos",
+          axisAge: "Idade (anos)",
+          empty: "Sem dados de projecao."
+        },
+      contributions: {
+        title: "Aportes",
+        listTitle: "Historico de aportes",
+        date: "Data",
+        amount: "Montante",
+        add: "Adicionar aporte",
+        actions: "Acoes",
+        delete: "Eliminar",
+        empty: "Sem aportes.",
+        error: "Dados de aportes em falta."
+      }
+    },
     summary: {
       value: "Valor atual do portfolio",
       investedLabel: "investido",
@@ -1072,11 +1657,14 @@ export const translations = {
   },
   es: {
     nav: {
+      cockpit: "Cockpit Overview",
       portfolios: "MyPortfolios",
       stocks: "Investments",
       transactions: "Banking Transactions",
       goals: "MyGoals",
-      management: "Portfolio Management"
+      debts: "Deudas",
+      management: "Portfolio Management",
+      disabledHint: "Crea un portfolio primero."
     },
     actions: {
       add: "Agregar"
@@ -1141,6 +1729,11 @@ export const translations = {
         tickerPlaceholder: "Buscar ticker",
         all: "Todos"
       },
+      tableTitle: "Holdings y actividad",
+      tableViews: {
+        holdings: "Holdings",
+        operations: "Operaciones"
+      },
       columns: {
         holding: "Holding",
         portfolio: "Portfolio",
@@ -1148,7 +1741,23 @@ export const translations = {
         costBasis: "Cost basis",
         currentValue: "Valor actual",
         totalProfit: "Ganancia total",
-        share: "Peso en portfolio"
+        share: "Peso en portfolio",
+        tags: "Tags"
+      },
+      operations: {
+        loading: "Cargando operaciones...",
+        loadError: "No se pudieron cargar operaciones.",
+        empty: "Sin operaciones.",
+        columns: {
+          date: "Fecha",
+          type: "Tipo",
+          ticker: "Ticker",
+          description: "Descripcion",
+          amount: "Monto",
+          source: "Archivo",
+          tags: "Tags",
+          actions: "Acciones"
+        }
       },
       tooltips: {
         costBasis:
@@ -1171,6 +1780,17 @@ export const translations = {
         saveError: "No se pudieron guardar detalles.",
         cancel: "Cancelar",
         noPortfolio: "Seleccione un portfolio."
+      },
+      tags: {
+        label: "Tags",
+        placeholder: "Agregar tag",
+        add: "Agregar",
+        created: "Tag añadida.",
+        deleted: "Tag eliminada.",
+        required: "Nombre de tag requerido.",
+        loadError: "No se pudieron cargar tags.",
+        saveError: "No se pudo guardar tag.",
+        deleteError: "No se pudo eliminar tag."
       },
       chart: {
         title: "Performance de holdings",
@@ -1218,6 +1838,75 @@ export const translations = {
         date: "Fecha obligatoria.",
         shares: "Shares debe ser mayor que 0.",
         price: "Precio debe ser mayor que 0."
+      }
+    },
+    bankings: {
+      title: "Transacciones Bancarias",
+      subtitle: "Importa y clasifica movimientos bancarios.",
+      clear: "Borrar transacciones",
+      clearing: "Borrando...",
+      clearConfirm:
+        "Borrar todas las transacciones bancarias importadas? Esta accion no se puede deshacer.",
+      clearSuccess: "Transacciones bancarias eliminadas.",
+      clearError: "No se pudieron borrar las transacciones bancarias.",
+      institution: "Institucion",
+      selectInstitution: "Seleccionar...",
+      customInstitution: "Otra...",
+      customInstitutionLabel: "Institucion personalizada",
+      fileLabel: "Elegir archivo",
+      pasteLabel: "Pegar datos",
+      preview: "Vista previa",
+      previewing: "Previsualizando...",
+      commit: "Importar",
+      importing: "Importando...",
+      previewTitle: "Vista previa",
+      loading: "Cargando...",
+      empty: "Sin transacciones.",
+      loadError: "No se pudieron cargar transacciones.",
+      noFile: "Selecciona un archivo o pega datos primero.",
+      institutionRequired: "La institucion es obligatoria.",
+      importSuccess: "Transacciones importadas.",
+      noSubcategory: "Sin subcategoria",
+      summary: {
+        income: "Ingresos",
+        expenses: "Gastos",
+        net: "Saldo",
+        topCategory: "Categoria principal"
+      },
+      charts: {
+        spendByCategory: "Gastos por categoria",
+        spendSubtitle: "Solo gastos",
+        monthlyNet: "Saldo mensual",
+        monthlySubtitle: "Ingresos menos gastos",
+        empty: "Sin datos para mostrar."
+      },
+      budgets: {
+        title: "Presupuestos",
+        subtitle: "Define limites mensuales por categoria.",
+        month: "Mes",
+        category: "Categoria",
+        categoryPlaceholder: "Seleccionar...",
+        amount: "Importe",
+        save: "Guardar presupuesto",
+        delete: "Eliminar",
+        spent: "Gastado",
+        remaining: "Restante",
+        empty: "Sin presupuestos."
+      },
+      filters: {
+        month: "Mes",
+        category: "Categoria",
+        subcategory: "Subcategoria",
+        institution: "Institucion",
+        all: "Todos"
+      },
+      columns: {
+        date: "Fecha",
+        description: "Descripcion",
+        amount: "Monto",
+        balance: "Saldo",
+        category: "Categoria",
+        institution: "Institucion"
       }
     },
     imports: {
@@ -1443,6 +2132,195 @@ export const translations = {
           category: "Categoria",
           actions: "Acciones"
         }
+      }
+    },
+    cockpit: {
+      title: "Cockpit Overview",
+      subtitle: "Resumen financiero de un vistazo.",
+      performanceTitle: "Desempeno del portfolio",
+      performanceValue: "Valor total del portfolio",
+      performanceDelta: "Cambio desde el inicio",
+      performanceTrend: "Performance mensual",
+      subPortfoliosTitle: "Sub-portfolios",
+      subPortfoliosEmpty: "Sin sub-portfolios.",
+      budgetTitle: "Presupuesto mensual",
+      budgetStatus: "Estado del presupuesto",
+      budgetSpent: "Gastado",
+      budgetRemaining: "Restante",
+      budgetEmpty: "Sin presupuestos.",
+      realEstateTitle: "Ingresos inmobiliarios",
+      realEstateSubtitle: "Ingreso mensual",
+      realEstateEmpty: "Sin datos inmobiliarios.",
+      debtTitle: "Resumen de deudas",
+      debtEmpty: "Sin deudas registradas.",
+      fireTitle: "Jornada FIRE",
+      fireSubtitle: "Progreso hacia independencia financiera",
+      fireEmpty: "Define un objetivo en MyGoals.",
+      empty: "Crea un portfolio para desbloquear el cockpit."
+    },
+    debts: {
+      title: "Deudas",
+      subtitle: "Controla tus deudas activas.",
+      ageTitle: "Edad del perfil",
+      ageLabel: "Edad actual",
+      agePlaceholder: "ej: 35",
+      ageSave: "Guardar edad",
+      ageSaving: "Guardando...",
+      ageSaved: "Edad guardada.",
+      ageError: "No se pudo guardar la edad.",
+      formTitle: "Agregar deuda",
+      formEditTitle: "Editar deuda",
+      name: "Nombre de la deuda",
+      originalAmount: "Importe original",
+      currentBalance: "Deuda pendiente",
+      monthlyPayment: "Cuota mensual",
+      save: "Guardar deuda",
+      update: "Actualizar deuda",
+      cancel: "Cancelar",
+      saving: "Guardando...",
+      loadError: "No se pudieron cargar deudas.",
+      saveError: "No se pudo guardar la deuda.",
+      saveSuccess: "Deuda guardada.",
+      deleteError: "No se pudo eliminar la deuda.",
+      deleteSuccess: "Deuda eliminada.",
+      deleteConfirm: "Eliminar esta deuda? Esta accion no se puede deshacer.",
+      delete: "Eliminar",
+      edit: "Editar",
+      updateSuccess: "Deuda actualizada.",
+      empty: "Sin deudas.",
+      summaryTitle: "Resumen de deudas",
+      percentPaid: "Pagado",
+      monthsRemaining: "Meses restantes",
+      payoffAge: "Edad de pago",
+      payoffAgeHint: "Define tu edad para ver la edad final.",
+      na: "N/A",
+      table: {
+        debt: "Deuda",
+        original: "Original",
+        balance: "Deuda pendiente",
+        monthly: "Mensual",
+        percent: "% pagado",
+        months: "Meses restantes",
+        payoffAge: "Edad de pago",
+        actions: "Acciones"
+      }
+    },
+    goals: {
+      title: "MyGoals",
+      subtitle: "Planifica tu FIRE y metas financieras.",
+      add: "Agregar objetivo",
+      newGoalPlaceholder: "Nombre del objetivo",
+      detailsTitle: "Detalles del objetivo",
+      detailsSubtitle: "Ajusta los inputs y aportes.",
+      loading: "Cargando objetivos...",
+      loadError: "No se pudieron cargar los objetivos.",
+      saveError: "No se pudo guardar el objetivo.",
+      deleteError: "No se pudo eliminar el objetivo.",
+      nameRequired: "El nombre del objetivo es obligatorio.",
+      created: "Objetivo creado.",
+      updated: "Objetivo actualizado.",
+      deleted: "Objetivo eliminado.",
+      rename: "Renombrar",
+      delete: "Eliminar",
+      deleteConfirm: "Eliminar este objetivo y todos los datos? No se puede deshacer.",
+      inputsTitle: "Inputs",
+      resultsTitle: "Resultados",
+      saveInputs: "Guardar inputs",
+      inputError: "Completa todos los campos antes de guardar.",
+      simulation: "Simulacion",
+      sections: {
+        portfolio: {
+          title: "Portfolio FIRE",
+          subtitle: "Basado en tu historial real de aportes.",
+          inputs: "Inputs del portfolio",
+          results: "Resultados del portfolio",
+          chartTitle: "Proyeccion Portfolio FIRE",
+          chartSubtitle: "Proyeccion con promedio de aportes e inflacion BCE."
+        },
+        simulation: {
+          title: "FIRE Simulation Playground",
+          subtitle: "Ajusta supuestos para simular escenarios.",
+          inputs: "Inputs de simulacion",
+          results: "Resultados de simulacion",
+          chartTitle: "Proyeccion simulada",
+          chartSubtitle: "Proyeccion basada en la edad de retiro y retorno ajustado a inflacion."
+        }
+      },
+      inputs: {
+        startDate: "Fecha de inicio",
+        durationYears: "Duracion (anos)",
+        sp500: "Ganancia esperada del portfolio (%)",
+        desiredMonthly: "Valor mensual deseado",
+        plannedMonthly: "Aporte mensual planeado",
+        withdrawalRate: "Tasa de retiro segura (%)",
+        initialInvestment: "Inversion inicial",
+        valueInvested: "Valor invertido",
+        inflation: "Inflacion esperada (%)",
+        ecbInflation: "Inflacion BCE (promedio 10 anos)",
+        returnMethod: "Metodo de rentabilidad",
+        currentAge: "Edad actual",
+        retirementAge: "Edad de retiro",
+        annualSpending: "Gasto anual en retiro",
+        currentAssets: "Activos invertidos actuales",
+        monthlyContribution: "Aporte mensual",
+        investmentReturn: "Tasa de retorno de inversion (%)",
+        safeWithdrawalRate: "Tasa de retiro segura (%)"
+      },
+      metrics: {
+        yearsElapsed: "Anos transcurridos",
+        yearsRemaining: "Anos restantes",
+        avgMonthly: "Media mensual de aportes",
+        avgMonthlyPortfolio: "Promedio de aportes",
+        avgMonthlySimulation: "Aporte mensual planeado",
+        investedTotal: "Valor invertido",
+        returnRate: "Rentabilidad anual",
+        returnCalc: "Resultado XIRR/CAGR",
+        future1000: "Valor futuro de 1000",
+        fireTarget: "Meta FIRE",
+        coastTarget: "Numero Coast FIRE",
+        coastTime: "Anos hasta Coast FIRE",
+        coastStatus: "Estado Coast",
+        fireTime: "Tiempo hasta FIRE",
+        years: "anos",
+        yearsToRetire: "Anos hasta retiro",
+        annualSpending: "Gasto anual",
+        currentAssets: "Activos actuales",
+        monthlyContribution: "Aporte mensual",
+        investmentReturn: "Retorno de inversion",
+        adjustedReturn: "Retorno ajustado a inflacion"
+      },
+      status: {
+        missing: "Meta pendiente",
+        impossible: "Imposible",
+        achieved: "FIRE logrado"
+      },
+      fireMessage: "FIRE en {years} anos y {months} meses",
+      tooltips: {
+        returnRate:
+          "Rentabilidad anualizada segun aportes y valor actual (XIRR o CAGR)."
+      },
+        chart: {
+          title: "Proyeccion FIRE",
+          subtitle: "Evolucion del capital y metas FIRE.",
+          continuedContrib: "Patrimonio con aportes continuados",
+          noContribAfterCoast: "Patrimonio sin aportes despues del Coast FIRE",
+          coastTarget: "Numero Coast FIRE",
+          fireLine: "Numero FIRE",
+          axisValue: "Valor ({currency})",
+          axisYears: "Anos",
+          axisAge: "Edad (anos)",
+          empty: "Sin datos de proyeccion."
+        },
+      contributions: {
+        title: "Aportes",
+        listTitle: "Historial de aportes",
+        date: "Fecha",
+        amount: "Monto",
+        add: "Agregar aporte",
+        actions: "Acciones",
+        delete: "Eliminar",
+        empty: "Sin aportes.",
+        error: "Faltan datos de aportes."
       }
     },
     summary: {

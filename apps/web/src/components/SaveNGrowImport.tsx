@@ -273,39 +273,53 @@ function SaveNGrowImport({
               <span>{t.imports.saveNGrow.columns.profitPercent}</span>
               <span>{t.imports.saveNGrow.columns.category}</span>
             </div>
-            {preview.items.map((item, index) => (
-              <div className="row" key={`${item.name}-${index}`}>
-                <span>{item.name}</span>
-                <span>
-                  {item.invested === null ? "?" : formatter.format(item.invested)}
-                </span>
-                <span>{formatter.format(item.current_value)}</span>
-                <span>
-                  {item.profit_value === null
-                    ? "?"
-                    : formatter.format(item.profit_value)}
-                </span>
-                <span>
-                  {item.profit_percent === null
-                    ? "?"
-                    : `${item.profit_percent.toFixed(2)}%`}
-                </span>
-                <select
-                  value={item.category}
-                  onChange={(event) => {
-                    const next = [...preview.items];
-                    next[index] = { ...item, category: event.target.value };
-                    setPreview({ ...preview, items: next });
-                  }}
-                >
-                  {categoryOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
+            {preview.items.map((item, index) => {
+              const profitClass =
+                item.profit_value === null || item.profit_value === undefined
+                  ? ""
+                  : item.profit_value >= 0
+                  ? "pos"
+                  : "neg";
+              const percentClass =
+                item.profit_percent === null || item.profit_percent === undefined
+                  ? profitClass
+                  : item.profit_percent >= 0
+                  ? "pos"
+                  : "neg";
+              return (
+                <div className="row" key={`${item.name}-${index}`}>
+                  <span>{item.name}</span>
+                  <span>
+                    {item.invested === null ? "?" : formatter.format(item.invested)}
+                  </span>
+                  <span>{formatter.format(item.current_value)}</span>
+                  <span className={profitClass}>
+                    {item.profit_value === null
+                      ? "?"
+                      : formatter.format(item.profit_value)}
+                  </span>
+                  <span className={percentClass}>
+                    {item.profit_percent === null
+                      ? "?"
+                      : `${item.profit_percent.toFixed(2)}%`}
+                  </span>
+                  <select
+                    value={item.category}
+                    onChange={(event) => {
+                      const next = [...preview.items];
+                      next[index] = { ...item, category: event.target.value };
+                      setPreview({ ...preview, items: next });
+                    }}
+                  >
+                    {categoryOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}
@@ -325,20 +339,28 @@ function SaveNGrowImport({
               <span>{t.imports.saveNGrow.columns.invested}</span>
               <span>{t.imports.saveNGrow.columns.profit}</span>
             </div>
-            {entries.map((entry) => (
-              <div className="row" key={entry.id}>
-                <span>
-                  {entry.snapshot_date || new Date(entry.created_at).toLocaleDateString()}
-                </span>
-                <span>{formatter.format(entry.current_value_total)}</span>
-                <span>{formatter.format(entry.invested_total)}</span>
-                <span>
-                  {entry.profit_value_total === null
-                    ? "?"
-                    : formatter.format(entry.profit_value_total)}
-                </span>
-              </div>
-            ))}
+            {entries.map((entry) => {
+              const profitClass =
+                entry.profit_value_total === null || entry.profit_value_total === undefined
+                  ? ""
+                  : entry.profit_value_total >= 0
+                  ? "pos"
+                  : "neg";
+              return (
+                <div className="row" key={entry.id}>
+                  <span>
+                    {entry.snapshot_date || new Date(entry.created_at).toLocaleDateString()}
+                  </span>
+                  <span>{formatter.format(entry.current_value_total)}</span>
+                  <span>{formatter.format(entry.invested_total)}</span>
+                  <span className={profitClass}>
+                    {entry.profit_value_total === null
+                      ? "?"
+                      : formatter.format(entry.profit_value_total)}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <p className="chart-sub">{t.imports.saveNGrow.noEntries}</p>

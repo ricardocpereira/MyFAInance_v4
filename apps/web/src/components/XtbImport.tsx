@@ -37,6 +37,17 @@ type XtbHoldingItem = {
   category?: string | null;
 };
 
+type XtbOperationItem = {
+  source_file: string;
+  ticker?: string | null;
+  operation_type: string;
+  operation_kind?: string | null;
+  description?: string | null;
+  amount?: number | null;
+  trade_date?: string | null;
+  currency?: string | null;
+};
+
 type XtbImportProps = {
   portfolioId: number;
   token: string;
@@ -59,6 +70,7 @@ function XtbImport({
   const [files, setFiles] = useState<File[]>([]);
   const [previewItems, setPreviewItems] = useState<XtbPreviewItem[]>([]);
   const [previewHoldings, setPreviewHoldings] = useState<XtbHoldingItem[]>([]);
+  const [previewOperations, setPreviewOperations] = useState<XtbOperationItem[]>([]);
   const [entries, setEntries] = useState<XtbImportEntry[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -161,9 +173,16 @@ function XtbImport({
             : Number(item.purchase_value) || 0,
         current_price:
           item.current_price === null || item.current_price === undefined
-            ? null
-            : Number(item.current_price) || 0,
+          ? null
+          : Number(item.current_price) || 0,
         category: item.category || "Stocks"
+      }));
+      const operations = (data.operations || []).map((item: XtbOperationItem) => ({
+        ...item,
+        amount:
+          item.amount === null || item.amount === undefined
+            ? null
+            : Number(item.amount) || 0
       }));
       const warningList: string[] = [];
       (data.warnings || []).forEach((warning: { filename: string; warnings: string[] }) => {
@@ -174,6 +193,7 @@ function XtbImport({
       setWarnings(warningList);
       setPreviewItems(items);
       setPreviewHoldings(holdings);
+      setPreviewOperations(operations);
     } catch (err) {
       setError(t.imports.xtb.previewError);
     } finally {
@@ -198,7 +218,11 @@ function XtbImport({
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`
           },
-          body: JSON.stringify({ items: previewItems, holdings: previewHoldings })
+          body: JSON.stringify({
+            items: previewItems,
+            holdings: previewHoldings,
+            operations: previewOperations
+          })
         }
       );
       const data = await response.json();
@@ -209,6 +233,7 @@ function XtbImport({
       setMessage(t.imports.xtb.saveSuccess);
       setPreviewItems([]);
       setPreviewHoldings([]);
+      setPreviewOperations([]);
       setFiles([]);
       await loadEntries();
       onRefresh();
@@ -330,44 +355,52 @@ function XtbImport({
               <span>{t.imports.xtb.columns.profit}</span>
               <span>{t.imports.xtb.columns.category}</span>
             </div>
-            {previewItems.map((item) => (
-              <div className="row" key={item.file_hash}>
-                <span>{item.filename}</span>
-                <span>{formatter.format(item.current_value)}</span>
-                <span>{formatter.format(item.cash_value)}</span>
-                <span>{formatter.format(item.invested)}</span>
-                <span>
-                  {item.profit_value === null
-                    ? "?"
-                    : formatter.format(item.profit_value)}
-                </span>
-                <select
-                  value={item.category}
-                  onChange={(event) => {
-                    const nextCategory = event.target.value;
-                    const next = previewItems.map((row) =>
-                      row.file_hash === item.file_hash
-                        ? { ...row, category: nextCategory }
-                        : row
-                    );
-                    setPreviewItems(next);
-                    setPreviewHoldings((current) =>
-                      current.map((holding) =>
-                        holding.source_file === item.filename
-                          ? { ...holding, category: nextCategory }
-                          : holding
-                      )
-                    );
-                  }}
-                >
-                  {categoryOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
+            {previewItems.map((item) => {
+              const profitClass =
+                item.profit_value === null || item.profit_value === undefined
+                  ? ""
+                  : item.profit_value >= 0
+                  ? "pos"
+                  : "neg";
+              return (
+                <div className="row" key={item.file_hash}>
+                  <span>{item.filename}</span>
+                  <span>{formatter.format(item.current_value)}</span>
+                  <span>{formatter.format(item.cash_value)}</span>
+                  <span>{formatter.format(item.invested)}</span>
+                  <span className={profitClass}>
+                    {item.profit_value === null
+                      ? "?"
+                      : formatter.format(item.profit_value)}
+                  </span>
+                  <select
+                    value={item.category}
+                    onChange={(event) => {
+                      const nextCategory = event.target.value;
+                      const next = previewItems.map((row) =>
+                        row.file_hash === item.file_hash
+                          ? { ...row, category: nextCategory }
+                          : row
+                      );
+                      setPreviewItems(next);
+                      setPreviewHoldings((current) =>
+                        current.map((holding) =>
+                          holding.source_file === item.filename
+                            ? { ...holding, category: nextCategory }
+                            : holding
+                        )
+                      );
+                    }}
+                  >
+                    {categoryOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}
@@ -389,31 +422,39 @@ function XtbImport({
               <span>{t.imports.xtb.columns.category}</span>
               <span>{t.imports.xtb.columns.actions}</span>
             </div>
-            {entries.map((entry) => (
-              <div className="row" key={entry.id}>
-                <span>{new Date(entry.imported_at).toLocaleDateString()}</span>
-                <span>{formatter.format(entry.current_value)}</span>
-                <span>{formatter.format(entry.invested)}</span>
-                <span>
-                  {entry.profit_value === null
-                    ? "?"
-                    : formatter.format(entry.profit_value)}
-                </span>
-                <span>{entry.category}</span>
-                <span>
-                  <button
-                    className="ghost-btn danger-btn"
-                    type="button"
-                    onClick={() => handleDelete(entry.id)}
-                    disabled={deletingId === entry.id}
-                  >
-                    {deletingId === entry.id
-                      ? t.imports.xtb.deleting
-                      : t.imports.xtb.delete}
-                  </button>
-                </span>
-              </div>
-            ))}
+            {entries.map((entry) => {
+              const profitClass =
+                entry.profit_value === null || entry.profit_value === undefined
+                  ? ""
+                  : entry.profit_value >= 0
+                  ? "pos"
+                  : "neg";
+              return (
+                <div className="row" key={entry.id}>
+                  <span>{new Date(entry.imported_at).toLocaleDateString()}</span>
+                  <span>{formatter.format(entry.current_value)}</span>
+                  <span>{formatter.format(entry.invested)}</span>
+                  <span className={profitClass}>
+                    {entry.profit_value === null
+                      ? "?"
+                      : formatter.format(entry.profit_value)}
+                  </span>
+                  <span>{entry.category}</span>
+                  <span>
+                    <button
+                      className="ghost-btn danger-btn"
+                      type="button"
+                      onClick={() => handleDelete(entry.id)}
+                      disabled={deletingId === entry.id}
+                    >
+                      {deletingId === entry.id
+                        ? t.imports.xtb.deleting
+                        : t.imports.xtb.delete}
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <p className="chart-sub">{t.imports.xtb.noEntries}</p>

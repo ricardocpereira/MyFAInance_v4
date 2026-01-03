@@ -291,12 +291,13 @@ function AforroNetImport({
               </div>
               {entry.items.map((item, index) => {
                 const profit = item.current_value - item.invested;
+                const profitClass = profit >= 0 ? "pos" : "neg";
                 return (
                   <div className="row" key={`${entry.filename}-${item.name}-${index}`}>
                     <span>{item.name}</span>
                     <span>{formatter.format(item.invested)}</span>
                     <span>{formatter.format(item.current_value)}</span>
-                    <span>{formatter.format(profit)}</span>
+                    <span className={profitClass}>{formatter.format(profit)}</span>
                     <select
                       value={item.category}
                       onChange={(event) => {
@@ -348,6 +349,7 @@ function AforroNetImport({
             </div>
             {entries.map((entry) => {
               const profit = entry.current_value_total - entry.invested_total;
+              const profitClass = profit >= 0 ? "pos" : "neg";
               return (
                 <div className="row" key={entry.id}>
                   <span>
@@ -356,7 +358,7 @@ function AforroNetImport({
                   </span>
                   <span>{formatter.format(entry.current_value_total)}</span>
                   <span>{formatter.format(entry.invested_total)}</span>
-                  <span>{formatter.format(profit)}</span>
+                  <span className={profitClass}>{formatter.format(profit)}</span>
                   <span>
                     <button
                       className="danger-btn"

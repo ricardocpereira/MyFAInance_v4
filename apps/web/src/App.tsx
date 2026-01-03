@@ -12,6 +12,10 @@ import Portfolios from "./pages/Portfolios";
 import WipPage from "./pages/WipPage";
 import Login from "./pages/Login";
 import Holdings from "./pages/Holdings";
+import BankingTransactions from "./pages/BankingTransactions";
+import CockpitOverview from "./pages/CockpitOverview";
+import Debts from "./pages/Debts";
+import MyGoals from "./pages/MyGoals";
 import { type Language, translations } from "./content/translations";
 import PortfolioModal from "./components/PortfolioModal";
 
@@ -131,10 +135,12 @@ function App() {
 
   const navItems = useMemo(
     () => [
+      { path: "/cockpit", label: t.nav.cockpit },
       { path: "/portfolios", label: t.nav.portfolios },
-      { path: "/holdings", label: t.nav.stocks },
-      { path: "/transactions", label: t.nav.transactions, wip: true },
-      { path: "/mygoals", label: t.nav.goals, wip: true }
+      { path: "/holdings", label: t.nav.stocks, requiresPortfolio: true },
+      { path: "/transactions", label: t.nav.transactions, requiresPortfolio: true },
+      { path: "/mygoals", label: t.nav.goals },
+      { path: "/debts", label: t.nav.debts, requiresPortfolio: true }
     ],
     [t]
   );
@@ -288,7 +294,22 @@ function App() {
                   to={item.path}
                   end={item.path === "/portfolios"}
                   className={({ isActive }) =>
-                    `nav-item${isActive ? " active" : ""}`
+                    `nav-item${isActive ? " active" : ""}${
+                      item.requiresPortfolio && portfolios.length === 0
+                        ? " disabled"
+                        : ""
+                    }`
+                  }
+                  onClick={(event) => {
+                    if (item.requiresPortfolio && portfolios.length === 0) {
+                      event.preventDefault();
+                      window.alert(t.nav.disabledHint);
+                    }
+                  }}
+                  title={
+                    item.requiresPortfolio && portfolios.length === 0
+                      ? t.nav.disabledHint
+                      : undefined
                   }
                 >
                   {item.label} {item.wip ? <span className="wip">WIP</span> : null}
@@ -354,7 +375,7 @@ function App() {
             path="/"
             element={
               isAuthenticated ? (
-                <Navigate to="/portfolios" replace />
+                <Navigate to="/cockpit" replace />
               ) : (
                 <Login
                   t={t}
@@ -366,6 +387,20 @@ function App() {
             }
           />
           <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route
+            path="/cockpit"
+            element={
+              isAuthenticated ? (
+                <CockpitOverview
+                  t={t}
+                  token={authToken}
+                  portfolio={activePortfolio}
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
           <Route
             path="/portfolios"
             element={
@@ -404,7 +439,11 @@ function App() {
             path="/transactions"
             element={
               isAuthenticated ? (
-                <WipPage title={t.nav.transactions} label={t.wip.label} message={t.wip.message} />
+                <BankingTransactions
+                  t={t}
+                  token={authToken}
+                  portfolio={activePortfolio}
+                />
               ) : (
                 <Navigate to="/" replace />
               )
@@ -414,7 +453,17 @@ function App() {
             path="/mygoals"
             element={
               isAuthenticated ? (
-                <WipPage title={t.nav.goals} label={t.wip.label} message={t.wip.message} />
+                <MyGoals t={t} token={authToken} portfolio={activePortfolio} />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/debts"
+            element={
+              isAuthenticated ? (
+                <Debts t={t} token={authToken} portfolio={activePortfolio} />
               ) : (
                 <Navigate to="/" replace />
               )

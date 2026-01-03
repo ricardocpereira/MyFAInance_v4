@@ -295,7 +295,15 @@ function BancoInvestImport({
                 <span>
                   {item.invested === null ? "?" : formatter.format(item.invested)}
                 </span>
-                <span>
+                <span
+                  className={
+                    item.gains === null || item.gains === undefined
+                      ? ""
+                      : item.gains >= 0
+                      ? "pos"
+                      : "neg"
+                  }
+                >
                   {item.gains === null ? "?" : formatter.format(item.gains)}
                 </span>
                 <select
@@ -373,7 +381,15 @@ function BancoInvestImport({
                             ? "?"
                             : formatter.format(item.invested)}
                         </span>
-                        <span>
+                        <span
+                          className={
+                            item.gains === null || item.gains === undefined
+                              ? ""
+                              : item.gains >= 0
+                              ? "pos"
+                              : "neg"
+                          }
+                        >
                           {item.gains === null ? "?" : formatter.format(item.gains)}
                         </span>
                         <span>{item.category}</span>

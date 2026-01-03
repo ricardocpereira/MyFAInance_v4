@@ -419,8 +419,224 @@ Implementation notes:
 - No dedicated XSS hardening beyond framework defaults.
 
 
+## Epic 4 - Banking Transactions
+
+### US-4.1 Import file or paste data
+As a user, I want to import a file or paste transaction data, so I can add bank movements quickly.
+Acceptance criteria:
+- Accepts `.csv`, `.xls`, `.xlsx`.
+- Paste input available as alternative to file upload.
+- Preview flow before committing.
+Status: Implemented.
+Implementation notes:
+- Web + Mobile support file selection and paste preview.
+- Santander, Revolut, and ActivoBank formats validated in preview.
+
+
+### US-4.2 Automatic column mapping + manual override
+As a user, I want automatic column detection so I don't have to map fields manually.
+Acceptance criteria:
+- Date, description, amount, balance, debit/credit, currency detected.
+- Manual override per column.
+Status: Implemented.
+Implementation notes:
+- Header heuristic with normalized keywords.
+- Mapping UI on preview (web + mobile).
+
+
+### US-4.3 Select institution of origin
+As a user, I want to associate transactions with a bank.
+Acceptance criteria:
+- Institution field required before commit.
+- Institutions list is reused for filtering.
+Status: Implemented.
+Implementation notes:
+- `banking_institutions` table + per-portfolio list.
+
+
+### US-4.4 Persist and browse transactions
+As a user, I want to store imported transactions and browse them with filters.
+Acceptance criteria:
+- Transactions saved with category/subcategory defaults.
+- Filters by month, category, subcategory, institution.
+Status: Implemented.
+Implementation notes:
+- `banking_transactions` table; filterable endpoint.
+- Web + Mobile list with filter controls.
+- Inline category edits update the transaction and refresh learned rules.
+- Single macro + subcategory picker per transaction (web + mobile).
+
+
+### US-4.5 Clear imported banking transactions
+As a user, I want to clear imported banking transactions, so I can reset the list.
+Acceptance criteria:
+- Clear action deletes imports, transactions, and institutions for the portfolio.
+- Requires confirmation.
+Status: Implemented.
+Implementation notes:
+- `POST /portfolios/{id}/banking/clear` endpoint.
+- Web + Mobile "Clear transactions" action.
+
+
+### US-4.6 Categorização inteligente e aprendizagem
+As a user, I want automatic categorization based on description and learn from corrections.
+Status: Implemented (rule-based learning).
+Implementation notes:
+- `banking_category_rules` stores per-portfolio rules keyed by normalized description + institution.
+- Imports apply exact-match rules to fill category/subcategory when defaults are used.
+- Keyword pre-analysis assigns a default category/subcategory when no rule matches.
+- Editing a transaction category updates the row and saves/updates the rule for future imports.
+
+
+### US-4.7 Banking dashboard summary
+As a user, I want a quick summary of my banking movements.
+Acceptance criteria:
+- Shows income, expenses, net, and top spending category.
+- Updates based on the current filters.
+Status: Implemented.
+Implementation notes:
+- Summary cards in Banking Transactions for web + mobile.
+
+### US-4.8 Banking analytics charts
+As a user, I want simple charts for my banking transactions.
+Acceptance criteria:
+- Spending by category chart (expenses only).
+- Monthly net chart (income minus expenses).
+- Updates after reclassifying a transaction.
+Status: Implemented.
+Implementation notes:
+- Web uses bar charts with existing chart styles.
+- Mobile shows bar rows for categories and monthly net.
+
+### US-4.9 Budgets per category
+As a user, I want to set monthly budgets per category so I can track spending limits.
+Acceptance criteria:
+- Create/update budget for a month + category with an amount.
+- Budgets show spent, remaining, and percentage.
+- Budgets update when transaction categories change.
+- Budgets can be deleted.
+Status: Implemented.
+Implementation notes:
+- Budgets stored in `banking_budgets` with month + category + amount.
+- Web + Mobile budget forms with progress bars and delete actions.
+
+## Cockpit Overview
+### US-8.1 Cockpit Overview landing page
+As a user, I want a cockpit dashboard after login with portfolio performance, sub-portfolios, budgets, and headline metrics.
+Acceptance criteria:
+- Cockpit Overview is the landing page after login on web + mobile.
+- Shows portfolio performance chart (monthly history), change since start, and total value.
+- Lists top sub-portfolios (institutions) with totals and gains.
+- Shows monthly budget status aggregated from banking budgets.
+- Shows placeholder sections for real estate, debts, and FIRE progress.
+- When no portfolios exist, only Cockpit Overview, MyPortfolios, and MyGoals remain active.
+Status: Implemented.
+Implementation notes:
+- Web route `/cockpit` with new layout and cards.
+- Mobile tab "Cockpit Overview" with stacked cards and performance chart.
+- Nav items for Investments/Banking are disabled when no portfolios.
+
+
+## Epic 9 - Debts
+
+### US-9.1 Track debts and payoff timeline
+As a user, I want to record my debts so I can see how much is left and when they will be paid off.
+Acceptance criteria:
+- New "Debts" button appears next to MyGoals in the header.
+- User can create/update/delete debts with name, original amount, current balance, and monthly payment.
+- System calculates months remaining and percent paid.
+- If user sets age in profile, payoff age is calculated.
+Status: Implemented.
+Implementation notes:
+- API endpoints `/profile` + `/debts` store age and debts.
+- Web + Mobile Debts screens show form, preview metrics, list, edit, and delete actions.
+
+## Epic 10 - MyGoals (FIRE)
+
+### US-10.1 Manage goals (sheets)
+As a user, I want to create, rename, and delete goal sheets (default FIRE included) so I can model different scenarios.
+Acceptance criteria:
+- Default FIRE sheet exists and cannot be deleted.
+- Users can create and rename goal sheets.
+- Users can delete non-default sheets.
+Status: Implemented.
+Implementation notes:
+- API endpoints `/goals` (list/create/update/delete).
+- Web + Mobile tabs for goal sheets with add/rename/delete actions.
+- New goals update immediately (optimistic insert + detail fetch after create).
+
+### US-10.2 Configure goal inputs
+As a user, I want to enter goal inputs (dates, rates, desired monthly income, etc.) so the system can compute projections.
+Acceptance criteria:
+- Inputs stored per goal sheet.
+- Return method can be switched between CAGR and XIRR.
+- Inputs split into two sections:
+- Portfolio FIRE (real contribution history, ECB 10-year inflation, XIRR/CAGR results).
+- FIRE Simulation Playground (walletburst-style inputs: current age, retirement age, annual spending, current assets, monthly contribution, investment return, inflation, SWR).
+- Portfolio FIRE stays inside the goal screen. Simulation opens via a dedicated "Simulation" button next to Add Goal. Both sections use Inputs/Results cards and a 4-line projection chart (continued contributions, no-contrib after Coast FIRE, Coast FIRE number, FIRE number) with a vertical marker at the Coast FIRE intersection (age/year label). ECB inflation is editable per goal.
+Status: Implemented.
+Implementation notes:
+- API endpoint `/goals/{goal_id}/inputs` stores and validates inputs.
+- Web + Mobile input forms include separate Portfolio vs Simulation blocks.
+- Portfolio inflation uses `ECB_INFLATION_10Y` (env) with fallback to input if missing.
+- Portfolio inputs include desired monthly amount (income target), planned monthly contribution, value invested, duration, expected portfolio gains, withdrawal rate, initial investment, return method, and inflation; numeric inputs accept `,` or `.` as decimal separators.
+- Simulation inputs use inflation-adjusted returns (investment return minus inflation) for calculations and charting.
+
+### US-10.3 Contributions log
+As a user, I want to record monthly contributions so averages and projections are accurate.
+Acceptance criteria:
+- Add and delete contributions per goal.
+- Average monthly contribution calculated as the mean of contribution amounts.
+Status: Implemented.
+Implementation notes:
+- API endpoints `/goals/{goal_id}/contributions` for add/delete.
+- Web + Mobile contribution form + history list.
+
+### US-10.4 FIRE calculations and projections
+As a user, I want to see calculated FIRE targets, Coast FIRE timing, and projections.
+Acceptance criteria:
+- Summary metrics include years elapsed/remaining, invested total, and return rate.
+- FIRE target and Coast/FIRE timing shown with status labels.
+- Projection charts rendered for Portfolio FIRE and Simulation Playground, with Simulation using age on the x-axis.
+Status: Implemented.
+Implementation notes:
+- API computes goal summary and projection series (`_goal_summary`) for portfolio and simulation sections.
+- Web + Mobile render two charts and two metric panels from API.
+- XIRR uses negative contribution flows plus the goal "value invested" as the final cashflow.
+
+## Epic 11 - Investment Tag Management
+
+### US-11.1 Tag selection for holdings
+As an investor, I want to select multiple tags for each holding so I can categorize investments consistently.
+Acceptance criteria:
+- Default tags include ETF, Value Stocks, Dividends, REITs, Emerging Markets, Children Future.
+- Selected tags persist per holding and appear in the holdings list.
+Status: Implemented.
+Implementation notes:
+- New `/holdings/tags` endpoint returns default + custom tags.
+- Tags stored per holding in `holding_tags` and returned in holdings responses.
+- Web + Mobile show tags column/chips and allow selecting tags inside holding details.
+
+### US-11.2 Custom tags
+As an investor, I want to create and remove custom tags unique to my user account.
+Acceptance criteria:
+- Custom tags are unique per user and can be deleted.
+- Default tags cannot be deleted.
+Status: Implemented.
+Implementation notes:
+- Custom tags stored in `investment_tags` (unique by owner + normalized key).
+- DELETE removes custom tag and detaches it from holdings.
+
+### US-11.3 Auto-tag ETF/REIT
+As an investor, I want ETF/REIT tags auto-assigned based on asset metadata.
+Acceptance criteria:
+- Auto tags appear for holdings matching ETF/REIT keywords.
+- Users can remove auto tags and they stay removed.
+Status: Implemented.
+Implementation notes:
+- Auto tags assigned in `_list_holdings_for_portfolio` via `_auto_tags_from_entry`.
+- Suppressed auto tags tracked in `holding_tag_suppressed`.
+
 ## Future sections (WIP)
 - Stocks
-- Transactions
-- MyGoals
 - Portfolio Management
