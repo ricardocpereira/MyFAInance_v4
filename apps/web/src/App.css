@@ -2835,6 +2835,60 @@
   gap: 6px;
 }
 
+.cockpit-income-box {
+  background: rgba(8, 14, 28, 0.75);
+  border: 1px solid rgba(42, 214, 141, 0.25);
+  border-radius: 16px;
+  padding: 16px;
+  text-align: center;
+  display: grid;
+  gap: 6px;
+}
+
+.cockpit-income-box strong {
+  color: #2ad68d;
+  font-size: 22px;
+}
+
+.cockpit-debt-card {
+  background: rgba(8, 14, 28, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.cockpit-debt-card .debt-header strong {
+  display: block;
+  font-size: 14px;
+}
+
+.cockpit-debt-card .debt-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cockpit-debt-card .debt-metric span {
+  display: block;
+  font-size: 11px;
+  color: #8fa0b8;
+}
+
+.cockpit-debt-card .debt-metric strong {
+  display: block;
+  font-size: 15px;
+  color: #dfe7f3;
+}
+
+.debt-progress .debt-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #8fa0b8;
+}
+
 @media (max-width: 1000px) {
   .top-bar {
     flex-direction: column;

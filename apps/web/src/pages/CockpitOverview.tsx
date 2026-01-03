@@ -241,8 +241,14 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
       debts.length > 0
         ? debts.reduce((sum, item) => sum + (Number(item.percent_paid) || 0), 0) /
           debts.length
-        : 0;
+      : 0;
     return { totalBalance, totalMonthly, avgPercent };
+  }, [debts]);
+  const primaryDebt = useMemo(() => {
+    if (!debts.length) {
+      return null;
+    }
+    return [...debts].sort((a, b) => b.current_balance - a.current_balance)[0];
   }, [debts]);
 
   const historySeries = useMemo(() => {
@@ -489,34 +495,69 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
             <h3>{t.cockpit.realEstateTitle}</h3>
             <span className="chart-sub">{t.cockpit.realEstateSubtitle}</span>
           </header>
+          <div className="cockpit-income-box">
+            <span className="chart-sub">{t.cockpit.realEstateSubtitle}</span>
+            <strong>{formatCurrency(0)}</strong>
+          </div>
+          <div className="cockpit-list">
+            <div className="cockpit-list-row">
+              <div>
+                <strong>Rental Properties</strong>
+                <span>0 units</span>
+              </div>
+              <div className="cockpit-list-metric">
+                <span className="pos">{formatCurrency(0)}</span>
+              </div>
+            </div>
+            <div className="cockpit-list-row">
+              <div>
+                <strong>REITs</strong>
+                <span>0 holdings</span>
+              </div>
+              <div className="cockpit-list-metric">
+                <span className="pos">{formatCurrency(0)}</span>
+              </div>
+            </div>
+          </div>
           <p className="chart-sub">{t.cockpit.realEstateEmpty}</p>
-          <strong>{formatCurrency(0)}</strong>
         </article>
 
         <article className="cockpit-card cockpit-debt">
           <header>
             <h3>{t.cockpit.debtTitle}</h3>
           </header>
-          {debts.length ? (
-            <div className="cockpit-list">
-              <div className="cockpit-list-row">
+          {debts.length && primaryDebt ? (
+            <div className="cockpit-debt-card">
+              <div className="debt-header">
                 <div>
-                  <strong>{t.debts.table.balance}</strong>
-                  <span>{formatCurrency(debtTotals.totalBalance)}</span>
-                </div>
-                <div>
-                  <strong>{t.debts.table.monthly}</strong>
-                  <span>{formatCurrency(debtTotals.totalMonthly)}</span>
+                  <strong>{primaryDebt.name}</strong>
+                  <span className="chart-sub">{t.debts.table.debt}</span>
                 </div>
               </div>
-              <div className="cockpit-list-row">
-                <div>
-                  <strong>{t.debts.percentPaid}</strong>
-                  <span>{debtTotals.avgPercent.toFixed(1)}%</span>
+              <div className="debt-metrics">
+                <div className="debt-metric">
+                  <span>{t.debts.table.balance}</span>
+                  <strong>{formatCurrency(primaryDebt.current_balance)}</strong>
                 </div>
-                <div>
-                  <strong>{t.debts.table.debt}</strong>
-                  <span>{debts.length}</span>
+                <div className="debt-metric">
+                  <span>{t.debts.table.monthly}</span>
+                  <strong>{formatCurrency(primaryDebt.monthly_payment)}</strong>
+                </div>
+              </div>
+              <div className="cockpit-progress debt-progress">
+                <div className="bar-track">
+                  <div
+                    className="bar-fill ok"
+                    style={{ width: `${Math.min(100, primaryDebt.percent_paid)}%` }}
+                  />
+                </div>
+                <div className="debt-meta">
+                  <span>
+                    {primaryDebt.percent_paid.toFixed(1)}% {t.debts.percentPaid}
+                  </span>
+                  <span>
+                    {t.debts.table.debt}: {debts.length}
+                  </span>
                 </div>
               </div>
             </div>
