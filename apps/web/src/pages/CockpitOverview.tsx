@@ -248,40 +248,52 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
   const historySeries = useMemo(() => {
     return [...historyMonthly].sort((a, b) => a.month.localeCompare(b.month));
   }, [historyMonthly]);
+  const chartSeries = useMemo(() => {
+    if (historySeries.length) {
+      return historySeries;
+    }
+    if (summary) {
+      return [
+        { month: "start", total: summary.total },
+        { month: "current", total: summary.total }
+      ];
+    }
+    return [];
+  }, [historySeries, summary]);
   const historyRange = useMemo(() => {
-    if (!historySeries.length) {
+    if (!chartSeries.length) {
       return { min: 0, max: 0 };
     }
-    const totals = historySeries.map((item) => item.total);
+    const totals = chartSeries.map((item) => item.total);
     return { min: Math.min(...totals), max: Math.max(...totals) };
-  }, [historySeries]);
+  }, [chartSeries]);
   const historyPath = useMemo(() => {
-    if (historySeries.length < 2) {
+    if (chartSeries.length < 2) {
       return "";
     }
     const width = 340;
     const height = 120;
     const padding = 12;
     const range = historyRange.max - historyRange.min || 1;
-    const step = width / (historySeries.length - 1);
-    return historySeries
+    const step = width / (chartSeries.length - 1);
+    return chartSeries
       .map((item, index) => {
         const x = padding + index * step;
         const y = padding + (height - ((item.total - historyRange.min) / range) * height);
         return `${index === 0 ? "M" : "L"} ${x} ${y}`;
       })
       .join(" ");
-  }, [historyRange.max, historyRange.min, historySeries]);
+  }, [chartSeries, historyRange.max, historyRange.min]);
   const historyAreaPath = useMemo(() => {
-    if (historySeries.length < 2) {
+    if (chartSeries.length < 2) {
       return "";
     }
     const width = 340;
     const height = 120;
     const padding = 12;
     const range = historyRange.max - historyRange.min || 1;
-    const step = width / (historySeries.length - 1);
-    const points = historySeries.map((item, index) => {
+    const step = width / (chartSeries.length - 1);
+    const points = chartSeries.map((item, index) => {
       const x = padding + index * step;
       const y = padding + (height - ((item.total - historyRange.min) / range) * height);
       return { x, y };
@@ -291,18 +303,18 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
       .join(" ");
     const bottomY = padding + height;
     return `${topPath} L ${points[points.length - 1].x} ${bottomY} L ${points[0].x} ${bottomY} Z`;
-  }, [historyRange.max, historyRange.min, historySeries]);
+  }, [chartSeries, historyRange.max, historyRange.min]);
 
   const performanceDelta = useMemo(() => {
-    if (historySeries.length < 2) {
+    if (chartSeries.length < 2) {
       return { value: 0, percent: 0 };
     }
-    const first = historySeries[0];
-    const last = historySeries[historySeries.length - 1];
+    const first = chartSeries[0];
+    const last = chartSeries[chartSeries.length - 1];
     const delta = last.total - first.total;
     const percent = first.total ? (delta / first.total) * 100 : 0;
     return { value: delta, percent };
-  }, [historySeries]);
+  }, [chartSeries]);
 
   const topInstitutions = useMemo(() => {
     return [...institutions]
@@ -362,7 +374,7 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
           </header>
           {summaryError ? <p className="login-error">{summaryError}</p> : null}
           {historyError ? <p className="login-error">{historyError}</p> : null}
-          {historySeries.length > 1 ? (
+          {historyPath ? (
             <svg className="cockpit-chart" viewBox="0 0 360 150" preserveAspectRatio="none">
               <path className="chart-area" d={historyAreaPath} />
               <path
