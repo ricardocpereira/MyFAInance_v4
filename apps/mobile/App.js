@@ -3184,7 +3184,12 @@ export default function App() {
                     >
                       {formatSigned(delta)}
                     </Text>
-                    <Text style={styles.subtitle}>
+                    <Text
+                      style={[
+                        styles.subtitle,
+                        deltaPercent >= 0 ? styles.posValue : styles.negValue
+                      ]}
+                    >
                       {formatSignedPercent(deltaPercent)}
                     </Text>
                   </View>
@@ -3399,13 +3404,27 @@ export default function App() {
             <View style={styles.metricRow}>
               <View style={styles.metricCard}>
                 <Text style={styles.metricLabel}>Total profit</Text>
-                <Text style={styles.metricValue}>
+                <Text
+                  style={[
+                    styles.metricValue,
+                    (summary.total_profit || 0) >= 0
+                      ? styles.posValue
+                      : styles.negValue
+                  ]}
+                >
                   {formatCurrency(summary.total_profit)}
                 </Text>
               </View>
               <View style={styles.metricCard}>
                 <Text style={styles.metricLabel}>Profit %</Text>
-                <Text style={styles.metricValue}>
+                <Text
+                  style={[
+                    styles.metricValue,
+                    (summary.profit_percent || 0) >= 0
+                      ? styles.posValue
+                      : styles.negValue
+                  ]}
+                >
                   {Number(summary.profit_percent || 0).toFixed(2)}%
                 </Text>
               </View>
@@ -3567,10 +3586,28 @@ export default function App() {
                         Total: {formatCurrency(item.total)}
                       </Text>
                       <Text style={styles.metaText}>
-                        Vs last month: {formatSigned(item.vs_last_month)}
+                        Vs last month:{" "}
+                        <Text
+                          style={
+                            (item.vs_last_month ?? 0) >= 0
+                              ? styles.posValue
+                              : styles.negValue
+                          }
+                        >
+                          {formatSigned(item.vs_last_month)}
+                        </Text>
                       </Text>
                       <Text style={styles.metaText}>
-                        Profit %: {formatSignedPercent(item.profit_percent)}
+                        Profit %:{" "}
+                        <Text
+                          style={
+                            (item.profit_percent ?? 0) >= 0
+                              ? styles.posValue
+                              : styles.negValue
+                          }
+                        >
+                          {formatSignedPercent(item.profit_percent)}
+                        </Text>
                       </Text>
                       <Text style={styles.metaText}>
                         Beni:{" "}
@@ -6771,7 +6808,12 @@ export default function App() {
                     Invested: {formatCurrency(invested)}
                   </Text>
                   <Text style={styles.metaText}>
-                    Profit: {formatCurrency(interests)}
+                    Profit:{" "}
+                    <Text
+                      style={interests >= 0 ? styles.posValue : styles.negValue}
+                    >
+                      {formatCurrency(interests)}
+                    </Text>
                   </Text>
                 </View>
               );
@@ -6834,7 +6876,14 @@ export default function App() {
                 <Text style={styles.metaText}>
                   Invested: {formatCurrency(item.invested)}
                 </Text>
-                <Text style={styles.metaText}>Profit: {formatCurrency(item.gains)}</Text>
+                <Text style={styles.metaText}>
+                  Profit:{" "}
+                  <Text
+                    style={item.gains >= 0 ? styles.posValue : styles.negValue}
+                  >
+                    {formatCurrency(item.gains)}
+                  </Text>
+                </Text>
               </View>
               <CategoryPicker
                 value={item.category}
@@ -7370,7 +7419,14 @@ export default function App() {
                         ) : null}
                         {entry.gains !== null && entry.gains !== undefined ? (
                           <Text style={styles.metaText}>
-                            Gains: {formatSigned(entry.gains)}
+                            Gains:{" "}
+                            <Text
+                              style={
+                                entry.gains >= 0 ? styles.posValue : styles.negValue
+                              }
+                            >
+                              {formatSigned(entry.gains)}
+                            </Text>
                           </Text>
                         ) : null}
                       </View>

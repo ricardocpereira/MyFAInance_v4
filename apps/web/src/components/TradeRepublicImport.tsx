@@ -425,7 +425,9 @@ function TradeRepublicImport({
                 <span>{formatter.format(item.available_cash)}</span>
                 <span>{formatter.format(item.interests_received)}</span>
                 <span>{formatter.format(item.invested)}</span>
-                <span>{formatter.format(item.gains)}</span>
+                <span className={item.gains >= 0 ? "pos" : "neg"}>
+                  {formatter.format(item.gains)}
+                </span>
                 <select
                   value={item.category}
                   onChange={(event) => {
@@ -474,7 +476,9 @@ function TradeRepublicImport({
                 <span>{formatter.format(entry.available_cash)}</span>
                 <span>{formatter.format(entry.interests_received)}</span>
                 <span>{formatter.format(entry.invested)}</span>
-                <span>{formatter.format(entry.gains)}</span>
+                <span className={entry.gains >= 0 ? "pos" : "neg"}>
+                  {formatter.format(entry.gains)}
+                </span>
                 <span>{entry.category || "Cash"}</span>
                 <span>
                   <button
