@@ -338,14 +338,6 @@ function App() {
 
           <section className="portfolio-strip">
             <div className="portfolio-row">
-              <NavLink
-                to="/portfolio-management"
-                className={({ isActive }) =>
-                  `portfolio-chip portfolio-management-chip${isActive ? " active" : ""}`
-                }
-              >
-                {t.nav.management} <span className="wip">WIP</span>
-              </NavLink>
               <div className="portfolio-chips">
                 {portfolios.length === 0 ? (
                   <span className="portfolio-empty">{t.portfolio.emptyMessage}</span>
