@@ -58,6 +58,15 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
   const [budgetsError, setBudgetsError] = useState("");
   const [debts, setDebts] = useState<DebtRow[]>([]);
   const [debtsError, setDebtsError] = useState("");
+  const [fireMetrics, setFireMetrics] = useState<{
+    years_elapsed: number;
+    years_remaining: number;
+    coast_years?: number | null;
+    coast_status?: string | null;
+    fire_years?: number | null;
+    fire_status?: string | null;
+  } | null>(null);
+  const [fireError, setFireError] = useState("");
 
   const currencyLabel = portfolio?.currency || "EUR";
   const currencyFormatter = useMemo(
@@ -94,6 +103,7 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
     setInstitutionsError("");
     setBudgetsError("");
     setDebtsError("");
+    setFireError("");
 
     const fetchJson = (path: string) =>
       fetch(`${API_BASE}${path}`, {
@@ -223,6 +233,59 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
         }
       });
 
+    fetchJson(`/goals`)
+      .then(({ ok, data }) => {
+        if (!active) {
+          return;
+        }
+        if (!ok) {
+          throw new Error("goals");
+        }
+        const goals = data.items || [];
+        const defaultGoal = goals.find((item: any) => item.is_default) || goals[0];
+        if (!defaultGoal) {
+          throw new Error("no-goal");
+        }
+        return fetchJson(
+          `/goals/${defaultGoal.id}?portfolio_id=${portfolio.id}`
+        );
+      })
+      .then((result) => {
+        if (!active || !result) {
+          return;
+        }
+        if (!result.ok) {
+          throw new Error("goal");
+        }
+        const metrics =
+          result.data?.portfolio_fire?.metrics ||
+          result.data?.simulation_fire?.metrics ||
+          null;
+        if (!metrics) {
+          throw new Error("no-metrics");
+        }
+        setFireMetrics({
+          years_elapsed: Number(metrics.years_elapsed) || 0,
+          years_remaining: Number(metrics.years_remaining) || 0,
+          coast_years:
+            metrics.coast_years === null || metrics.coast_years === undefined
+              ? null
+              : Number(metrics.coast_years) || 0,
+          coast_status: metrics.coast_status ?? null,
+          fire_years:
+            metrics.fire_years === null || metrics.fire_years === undefined
+              ? null
+              : Number(metrics.fire_years) || 0,
+          fire_status: metrics.fire_status ?? null
+        });
+      })
+      .catch(() => {
+        if (active) {
+          setFireError(t.cockpit.fireEmpty);
+          setFireMetrics(null);
+        }
+      });
+
     return () => {
       active = false;
     };
@@ -335,6 +398,39 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
     const percent = total ? (spent / total) * 100 : 0;
     return { total, spent, remaining, percent };
   }, [budgets]);
+
+  const fireProgress = useMemo(() => {
+    if (!fireMetrics) {
+      return null;
+    }
+    const totalYears = fireMetrics.years_elapsed + fireMetrics.years_remaining;
+    if (!totalYears) {
+      return null;
+    }
+    const coastYears =
+      fireMetrics.coast_status === "achieved"
+        ? fireMetrics.years_elapsed
+        : typeof fireMetrics.coast_years === "number"
+        ? fireMetrics.coast_years
+        : null;
+    const fireYears =
+      fireMetrics.fire_status === "ok" && typeof fireMetrics.fire_years === "number"
+        ? fireMetrics.fire_years
+        : null;
+    const coastPercent =
+      coastYears !== null ? Math.min(100, Math.max(0, (coastYears / totalYears) * 100)) : 0;
+    const firePercent =
+      fireYears !== null ? Math.min(100, Math.max(0, (fireYears / totalYears) * 100)) : 0;
+    return {
+      totalYears,
+      coastYears,
+      fireYears,
+      coastPercent,
+      firePercent,
+      fireStatus: fireMetrics.fire_status,
+      coastStatus: fireMetrics.coast_status
+    };
+  }, [fireMetrics]);
 
   if (!portfolio) {
     return (
@@ -501,18 +597,24 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
           </div>
           <div className="cockpit-list">
             <div className="cockpit-list-row">
-              <div>
-                <strong>Rental Properties</strong>
-                <span>0 units</span>
+              <div className="cockpit-item-title">
+                <span className="cockpit-icon rental-icon" aria-hidden />
+                <div>
+                  <strong>Rental Properties</strong>
+                  <span>0 units</span>
+                </div>
               </div>
               <div className="cockpit-list-metric">
                 <span className="pos">{formatCurrency(0)}</span>
               </div>
             </div>
             <div className="cockpit-list-row">
-              <div>
-                <strong>REITs</strong>
-                <span>0 holdings</span>
+              <div className="cockpit-item-title">
+                <span className="cockpit-icon reit-icon" aria-hidden />
+                <div>
+                  <strong>REITs</strong>
+                  <span>0 holdings</span>
+                </div>
               </div>
               <div className="cockpit-list-metric">
                 <span className="pos">{formatCurrency(0)}</span>
@@ -571,13 +673,44 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
             <h3>{t.cockpit.fireTitle}</h3>
             <span className="chart-sub">{t.cockpit.fireSubtitle}</span>
           </header>
-          <p className="chart-sub">{t.cockpit.fireEmpty}</p>
-          <div className="cockpit-progress">
-            <div className="bar-track">
-              <div className="bar-fill ok" style={{ width: "12%" }} />
+          {fireProgress ? (
+            <div className="cockpit-fire-progress">
+              <div className="bar-track fire-track">
+                <span
+                  className="bar-fill fire-coast"
+                  style={{ width: `${fireProgress.coastPercent}%` }}
+                />
+                <span
+                  className="bar-fill fire-target"
+                  style={{
+                    left: `${fireProgress.coastPercent}%`,
+                    width: `${Math.max(
+                      0,
+                      fireProgress.firePercent - fireProgress.coastPercent
+                    )}%`
+                  }}
+                />
+              </div>
+              <div className="fire-meta">
+                <span>
+                  Coast FIRE:{" "}
+                  {fireProgress.coastYears === null
+                    ? "N/A"
+                    : `${fireProgress.coastYears.toFixed(1)} yrs`}
+                </span>
+                <span>
+                  FIRE:{" "}
+                  {fireProgress.fireYears === null
+                    ? fireProgress.fireStatus === "impossible"
+                      ? "Impossible"
+                      : "N/A"
+                    : `${fireProgress.fireYears.toFixed(1)} yrs`}
+                </span>
+              </div>
             </div>
-            <span className="chart-sub">12% - 16 years</span>
-          </div>
+          ) : (
+            <p className="chart-sub">{fireError || t.cockpit.fireEmpty}</p>
+          )}
         </article>
       </section>
     </div>
