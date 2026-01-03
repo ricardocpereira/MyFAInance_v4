@@ -23,6 +23,14 @@ type GoalInputs = {
   initial_investment: number;
   inflation_rate: number;
   portfolio_inflation_rate: number;
+  simulation_current_age: number;
+  simulation_retirement_age: number;
+  simulation_annual_spending: number;
+  simulation_current_assets: number;
+  simulation_monthly_contribution: number;
+  simulation_return_rate: number;
+  simulation_inflation_rate: number;
+  simulation_swr: number;
   return_method: string;
 };
 
@@ -51,10 +59,33 @@ type GoalProjection = {
   with_contrib: number;
   without_contrib: number | null;
   coast_target: number | null;
+  age?: number;
 };
 
 type GoalFireSection = {
   metrics: GoalMetrics;
+  projection: GoalProjection[];
+};
+
+type SimulationMetrics = {
+  current_age: number;
+  retirement_age: number;
+  years_to_retire: number;
+  annual_spending: number;
+  current_assets: number;
+  monthly_contribution: number;
+  investment_return: number;
+  inflation_rate: number;
+  swr: number;
+  adjusted_return: number;
+  fire_target: number | null;
+  coast_target: number | null;
+  coast_years: number | null;
+  coast_status: string;
+};
+
+type SimulationSection = {
+  metrics: SimulationMetrics;
   projection: GoalProjection[];
 };
 
@@ -157,11 +188,14 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
   const [activeGoalId, setActiveGoalId] = useState<number | null>(null);
   const [goalInputs, setGoalInputs] = useState<GoalInputs | null>(null);
   const [portfolioFire, setPortfolioFire] = useState<GoalFireSection | null>(null);
-  const [simulationFire, setSimulationFire] = useState<GoalFireSection | null>(null);
+  const [simulationFire, setSimulationFire] = useState<SimulationSection | null>(null);
   const [goalContributions, setGoalContributions] = useState<GoalContribution[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [goalViewMode, setGoalViewMode] = useState<"portfolio" | "simulation">(
+    "portfolio"
+  );
 
   const [newGoalName, setNewGoalName] = useState("");
   const [renameGoalName, setRenameGoalName] = useState("");
@@ -176,6 +210,14 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
     initial_investment: "",
     inflation_rate: "",
     portfolio_inflation_rate: "",
+    simulation_current_age: "",
+    simulation_retirement_age: "",
+    simulation_annual_spending: "",
+    simulation_current_assets: "",
+    simulation_monthly_contribution: "",
+    simulation_return_rate: "",
+    simulation_inflation_rate: "",
+    simulation_swr: "",
     return_method: "cagr"
   });
 
@@ -220,6 +262,25 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
     const years = Math.max(0, Math.floor(metrics.fire_years));
     const months = metrics.fire_months ?? 0;
     return t.goals.fireMessage.replace("{years}", String(years)).replace("{months}", String(months));
+  };
+
+  const formatSimulationCoast = (metrics: SimulationMetrics | null) => {
+    if (!metrics) {
+      return "N/A";
+    }
+    if (metrics.coast_status === "missing") {
+      return t.goals.status.missing;
+    }
+    if (metrics.coast_status === "imp") {
+      return t.goals.status.impossible;
+    }
+    if (metrics.coast_status === "achieved") {
+      return t.goals.status.achieved;
+    }
+    if (metrics.coast_years === null) {
+      return "N/A";
+    }
+    return `${metrics.coast_years.toFixed(1)} ${t.goals.metrics.years}`;
   };
 
   const loadGoals = async () => {
@@ -277,6 +338,18 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
         portfolio_inflation_rate: String(
           (inputs.portfolio_inflation_rate || inputs.inflation_rate || 0) * 100
         ),
+        simulation_current_age: String(inputs.simulation_current_age ?? ""),
+        simulation_retirement_age: String(inputs.simulation_retirement_age ?? ""),
+        simulation_annual_spending: String(inputs.simulation_annual_spending ?? ""),
+        simulation_current_assets: String(inputs.simulation_current_assets ?? ""),
+        simulation_monthly_contribution: String(
+          inputs.simulation_monthly_contribution ?? ""
+        ),
+        simulation_return_rate: String((inputs.simulation_return_rate || 0) * 100),
+        simulation_inflation_rate: String(
+          (inputs.simulation_inflation_rate || 0) * 100
+        ),
+        simulation_swr: String((inputs.simulation_swr || 0) * 100),
         return_method: inputs.return_method || "cagr"
       });
     } catch (err) {
@@ -321,10 +394,15 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
       if (!response.ok) {
         throw new Error(data?.detail || "Failed");
       }
-      await loadGoals();
-      setActiveGoalId(data.goal.id);
+      const createdGoal = data.goal as Goal;
+      setGoals((prev) => [
+        createdGoal,
+        ...prev.filter((item) => item.id !== createdGoal.id)
+      ]);
+      setActiveGoalId(createdGoal.id);
       setNewGoalName("");
       setMessage(t.goals.created);
+      await loadGoal(createdGoal.id);
     } catch (err) {
       setError(t.goals.saveError);
     } finally {
@@ -413,6 +491,16 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
     const initial = parseNumber(formState.initial_investment);
     const inflation = parseNumber(formState.inflation_rate);
     const portfolioInflation = parseNumber(formState.portfolio_inflation_rate);
+    const simulationCurrentAge = parseNumber(formState.simulation_current_age);
+    const simulationRetirementAge = parseNumber(formState.simulation_retirement_age);
+    const simulationAnnualSpending = parseNumber(formState.simulation_annual_spending);
+    const simulationCurrentAssets = parseNumber(formState.simulation_current_assets);
+    const simulationMonthlyContribution = parseNumber(
+      formState.simulation_monthly_contribution
+    );
+    const simulationReturnRate = parseNumber(formState.simulation_return_rate);
+    const simulationInflationRate = parseNumber(formState.simulation_inflation_rate);
+    const simulationSWR = parseNumber(formState.simulation_swr);
     if (
       !formState.start_date ||
       duration === null ||
@@ -422,7 +510,15 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
       withdrawal === null ||
       initial === null ||
       inflation === null ||
-      portfolioInflation === null
+      portfolioInflation === null ||
+      simulationCurrentAge === null ||
+      simulationRetirementAge === null ||
+      simulationAnnualSpending === null ||
+      simulationCurrentAssets === null ||
+      simulationMonthlyContribution === null ||
+      simulationReturnRate === null ||
+      simulationInflationRate === null ||
+      simulationSWR === null
     ) {
       setError(t.goals.inputError);
       setLoading(false);
@@ -445,6 +541,14 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
           initial_investment: initial,
           inflation_rate: inflation,
           portfolio_inflation_rate: portfolioInflation,
+          simulation_current_age: simulationCurrentAge,
+          simulation_retirement_age: simulationRetirementAge,
+          simulation_annual_spending: simulationAnnualSpending,
+          simulation_current_assets: simulationCurrentAssets,
+          simulation_monthly_contribution: simulationMonthlyContribution,
+          simulation_return_rate: simulationReturnRate,
+          simulation_inflation_rate: simulationInflationRate,
+          simulation_swr: simulationSWR,
           return_method: formState.return_method
         })
       });
@@ -537,9 +641,12 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
     }
   };
 
-  const buildChartData = (section: GoalFireSection | null) => {
+  const buildChartData = (
+    section: { metrics: { fire_target?: number | null }; projection?: GoalProjection[] } | null
+  ) => {
     const projection = section?.projection || [];
-    const fireTarget = section?.metrics.fire_target ?? null;
+    const fireTarget =
+      section?.metrics?.fire_target === undefined ? null : section.metrics.fire_target ?? null;
     const values = [
       ...projection.map((item) => item.with_contrib),
       ...projection
@@ -553,11 +660,20 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
       values.push(fireTarget);
     }
     const maxValue = values.length ? Math.max(...values, 1) : 1;
+    const startValue = projection.length
+      ? projection[0].age ?? projection[0].year
+      : 0;
+    const endValue = projection.length
+      ? projection[projection.length - 1].age ?? projection[projection.length - 1].year
+      : 0;
     return {
       maxValue,
       fireTarget,
       projection,
-      years: projection.length ? projection[projection.length - 1].year : 0
+      years: projection.length ? projection[projection.length - 1].year : 0,
+      startValue,
+      endValue,
+      usesAge: projection.length ? projection[0].age !== undefined : false
     };
   };
 
@@ -613,21 +729,64 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
     maxValue: number;
     projection: GoalProjection[];
     years: number;
+    startValue: number;
+    endValue: number;
+    usesAge: boolean;
   }) => {
-    const startYear = chart.projection.length ? chart.projection[0].year : 0;
-    const endYear = chart.projection.length ? chart.years : 0;
+    const startLabel = chart.projection.length ? chart.startValue : 0;
+    const endLabel = chart.projection.length ? chart.endValue : 0;
     return {
-      startYear,
-      endYear,
+      startLabel,
+      endLabel,
       maxLabel: formatAxisValue(chart.maxValue, currency),
       midLabel: formatAxisValue(chart.maxValue / 2, currency),
       axisValueLabel: t.goals.chart.axisValue.replace("{currency}", currency),
-      axisYearsLabel: t.goals.chart.axisYears
+      axisYearsLabel: chart.usesAge ? t.goals.chart.axisAge : t.goals.chart.axisYears
+    };
+  };
+
+  const buildCoastMarker = (projection: GoalProjection[]) => {
+    if (!projection.length) {
+      return null;
+    }
+    const lastIndex = projection.length - 1;
+    let markerIndex = -1;
+    for (let i = 0; i < projection.length; i += 1) {
+      const point = projection[i];
+      if (
+        point.without_contrib !== null &&
+        point.coast_target !== null &&
+        point.without_contrib >= point.coast_target
+      ) {
+        markerIndex = i;
+        break;
+      }
+    }
+    if (markerIndex < 0) {
+      return null;
+    }
+    const point = projection[markerIndex];
+    const x = lastIndex === 0 ? 0 : (markerIndex / lastIndex) * 100;
+    const labelValue = point.age ?? point.year;
+    if (labelValue === undefined || labelValue === null) {
+      return null;
+    }
+    return {
+      x,
+      label: labelValue.toFixed(0)
     };
   };
 
   const portfolioAxis = buildAxisLabels(portfolioChart);
   const simulationAxis = buildAxisLabels(simulationChart);
+  const portfolioCoastMarker = useMemo(
+    () => buildCoastMarker(portfolioChart.projection),
+    [portfolioChart]
+  );
+  const simulationCoastMarker = useMemo(
+    () => buildCoastMarker(simulationChart.projection),
+    [simulationChart]
+  );
 
   return (
     <section className="goals-page">
@@ -645,6 +804,15 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
             />
             <button className="primary-btn" type="button" onClick={handleCreateGoal}>
               {t.goals.add}
+            </button>
+            <button
+              className={`ghost-btn${goalViewMode === "simulation" ? " active" : ""}`}
+              type="button"
+              onClick={() =>
+                setGoalViewMode((prev) => (prev === "simulation" ? "portfolio" : "simulation"))
+              }
+            >
+              {t.goals.simulation}
             </button>
             <button
               className="danger-btn"
@@ -703,6 +871,7 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
         {error ? <p className="error">{error}</p> : null}
 
         <div className="goals-sections">
+        {goalViewMode === "portfolio" ? (
         <div className="goals-section">
           <div className="goals-section-header">
             <div>
@@ -728,6 +897,42 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
                   />
                 </div>
                 <div className="field">
+                  <label>{t.goals.inputs.desiredMonthly}</label>
+                  <input
+                    value={formState.desired_monthly}
+                    onChange={(event) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        desired_monthly: event.target.value
+                      }))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label>{t.goals.inputs.plannedMonthly}</label>
+                  <input
+                    value={formState.planned_monthly}
+                    onChange={(event) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        planned_monthly: event.target.value
+                      }))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label>{t.goals.inputs.valueInvested}</label>
+                  <input
+                    value={formState.initial_investment}
+                    onChange={(event) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        initial_investment: event.target.value
+                      }))
+                    }
+                  />
+                </div>
+                <div className="field">
                   <label>{t.goals.inputs.durationYears}</label>
                   <input
                     value={formState.duration_years}
@@ -747,18 +952,6 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
                       setFormState((prev) => ({
                         ...prev,
                         sp500_return: event.target.value
-                      }))
-                    }
-                  />
-                </div>
-                <div className="field">
-                  <label>{t.goals.inputs.desiredMonthly}</label>
-                  <input
-                    value={formState.desired_monthly}
-                    onChange={(event) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        desired_monthly: event.target.value
                       }))
                     }
                   />
@@ -940,9 +1133,9 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
                     <span>{formatAxisValue(0, currency)}</span>
                     <span className="axis-label">{portfolioAxis.axisValueLabel}</span>
                   </div>
-                  <div className="goals-chart-plot">
-                    <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-                      <defs>
+                <div className="goals-chart-plot">
+                  <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <defs>
                         <linearGradient
                           id="goalFillPortfolio"
                           x1="0"
@@ -963,6 +1156,28 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
                           stroke="#ff6b6b"
                           strokeWidth="0.8"
                         />
+                      ) : null}
+                      {portfolioCoastMarker ? (
+                        <>
+                          <line
+                            x1={portfolioCoastMarker.x}
+                            y1="0"
+                            x2={portfolioCoastMarker.x}
+                            y2="100"
+                            stroke="#4ea1ff"
+                            strokeDasharray="2 2"
+                            strokeWidth="0.8"
+                          />
+                          <text
+                            x={portfolioCoastMarker.x}
+                            y="98"
+                            fill="#9aa9bf"
+                            fontSize="4"
+                            textAnchor="middle"
+                          >
+                            {portfolioCoastMarker.label}
+                          </text>
+                        </>
                       ) : null}
                       {portfolioCoastPath ? (
                         <path
@@ -999,8 +1214,8 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
                   </div>
                 </div>
                 <div className="goals-chart-x">
-                  <span>{portfolioAxis.startYear}</span>
-                  <span>{portfolioAxis.endYear}</span>
+                  <span>{portfolioAxis.startLabel}</span>
+                  <span>{portfolioAxis.endLabel}</span>
                 </div>
                 <p className="goals-chart-axis-label">{portfolioAxis.axisYearsLabel}</p>
                 <div className="goals-chart-legend">
@@ -1021,7 +1236,9 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
             )}
           </div>
         </div>
+        ) : null}
 
+        {goalViewMode === "simulation" ? (
         <div className="goals-section">
           <div className="goals-section-header">
             <div>
@@ -1034,125 +1251,97 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
               <h5>{t.goals.sections.simulation.inputs}</h5>
               <div className="form-grid">
                 <div className="field">
-                  <label>{t.goals.inputs.startDate}</label>
+                  <label>{t.goals.inputs.currentAge}</label>
                   <input
-                    type="date"
-                    value={formState.start_date}
+                    value={formState.simulation_current_age}
                     onChange={(event) =>
                       setFormState((prev) => ({
                         ...prev,
-                        start_date: event.target.value
+                        simulation_current_age: event.target.value
                       }))
                     }
                   />
                 </div>
                 <div className="field">
-                  <label>{t.goals.inputs.desiredMonthly}</label>
+                  <label>{t.goals.inputs.retirementAge}</label>
                   <input
-                    value={formState.desired_monthly}
+                    value={formState.simulation_retirement_age}
                     onChange={(event) =>
                       setFormState((prev) => ({
                         ...prev,
-                        desired_monthly: event.target.value
+                        simulation_retirement_age: event.target.value
                       }))
                     }
                   />
                 </div>
                 <div className="field">
-                  <label>{t.goals.inputs.plannedMonthly}</label>
+                  <label>{t.goals.inputs.annualSpending}</label>
                   <input
-                    value={formState.planned_monthly}
+                    value={formState.simulation_annual_spending}
                     onChange={(event) =>
                       setFormState((prev) => ({
                         ...prev,
-                        planned_monthly: event.target.value
+                        simulation_annual_spending: event.target.value
                       }))
                     }
                   />
                 </div>
                 <div className="field">
-                  <label>{t.goals.inputs.valueInvested}</label>
+                  <label>{t.goals.inputs.currentAssets}</label>
                   <input
-                    value={formState.initial_investment}
+                    value={formState.simulation_current_assets}
                     onChange={(event) =>
                       setFormState((prev) => ({
                         ...prev,
-                        initial_investment: event.target.value
+                        simulation_current_assets: event.target.value
                       }))
                     }
                   />
                 </div>
                 <div className="field">
-                  <label>{t.goals.inputs.durationYears}</label>
+                  <label>{t.goals.inputs.monthlyContribution}</label>
                   <input
-                    value={formState.duration_years}
+                    value={formState.simulation_monthly_contribution}
                     onChange={(event) =>
                       setFormState((prev) => ({
                         ...prev,
-                        duration_years: event.target.value
+                        simulation_monthly_contribution: event.target.value
                       }))
                     }
                   />
                 </div>
                 <div className="field">
-                  <label>{t.goals.inputs.sp500}</label>
+                  <label>{t.goals.inputs.investmentReturn}</label>
                   <input
-                    value={formState.sp500_return}
+                    value={formState.simulation_return_rate}
                     onChange={(event) =>
                       setFormState((prev) => ({
                         ...prev,
-                        sp500_return: event.target.value
+                        simulation_return_rate: event.target.value
                       }))
                     }
                   />
-                </div>
-                <div className="field">
-                  <label>{t.goals.inputs.withdrawalRate}</label>
-                  <input
-                    value={formState.withdrawal_rate}
-                    onChange={(event) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        withdrawal_rate: event.target.value
-                      }))
-                    }
-                  />
-                </div>
-                <div className="field">
-                  <label>{t.goals.inputs.initialInvestment}</label>
-                  <input
-                    value={formState.initial_investment}
-                    onChange={(event) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        initial_investment: event.target.value
-                      }))
-                    }
-                  />
-                </div>
-                <div className="field">
-                  <label>{t.goals.inputs.returnMethod}</label>
-                  <select
-                    value={formState.return_method}
-                    onChange={(event) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        return_method: event.target.value
-                      }))
-                    }
-                  >
-                    <option value="cagr">CAGR</option>
-                    <option value="xirr">XIRR</option>
-                  </select>
                 </div>
                 <div className="field">
                   <label>{t.goals.inputs.inflation}</label>
                   <input
-                    value={formState.inflation_rate}
+                    value={formState.simulation_inflation_rate}
                     onChange={(event) =>
                       setFormState((prev) => ({
                         ...prev,
-                        inflation_rate: event.target.value
+                        simulation_inflation_rate: event.target.value
+                      }))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label>{t.goals.inputs.safeWithdrawalRate}</label>
+                  <input
+                    value={formState.simulation_swr}
+                    onChange={(event) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        simulation_swr: event.target.value
                       }))
                     }
                   />
@@ -1169,66 +1358,57 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
               <h5>{t.goals.sections.simulation.results}</h5>
               <div className="goals-metrics">
                 <div className="goals-metric">
-                  <span>{t.goals.metrics.yearsElapsed}</span>
+                  <span>{t.goals.metrics.yearsToRetire}</span>
                   <strong>
                     {simulationFire
-                      ? simulationFire.metrics.years_elapsed.toFixed(1)
+                      ? simulationFire.metrics.years_to_retire.toFixed(1)
                       : "N/A"}
                   </strong>
                 </div>
                 <div className="goals-metric">
-                  <span>{t.goals.metrics.yearsRemaining}</span>
+                  <span>{t.goals.metrics.annualSpending}</span>
                   <strong>
                     {simulationFire
-                      ? simulationFire.metrics.years_remaining.toFixed(1)
+                      ? formatNumber(simulationFire.metrics.annual_spending, currency)
                       : "N/A"}
                   </strong>
                 </div>
                 <div className="goals-metric">
-                  <span>{t.goals.metrics.avgMonthlySimulation}</span>
+                  <span>{t.goals.metrics.currentAssets}</span>
                   <strong>
                     {simulationFire
-                      ? formatNumber(simulationFire.metrics.avg_monthly, currency)
+                      ? formatNumber(simulationFire.metrics.current_assets, currency)
                       : "N/A"}
                   </strong>
                 </div>
                 <div className="goals-metric">
-                  <span>{t.goals.metrics.investedTotal}</span>
+                  <span>{t.goals.metrics.monthlyContribution}</span>
                   <strong>
                     {simulationFire
-                      ? formatNumber(simulationFire.metrics.invested_total, currency)
+                      ? formatNumber(simulationFire.metrics.monthly_contribution, currency)
                       : "N/A"}
                   </strong>
                 </div>
                 <div className="goals-metric">
-                  <span>{t.goals.metrics.returnRate}</span>
+                  <span>{t.goals.metrics.investmentReturn}</span>
                   <strong>
                     {simulationFire
-                      ? formatPercent(
-                          simulationFire.metrics.assumption_return ??
-                            simulationFire.metrics.return_rate
-                        )
+                      ? formatPercent(simulationFire.metrics.investment_return)
                       : "N/A"}
                   </strong>
                 </div>
                 <div className="goals-metric">
-                  <span>{t.goals.metrics.returnCalc}</span>
-                  <strong>
-                    {simulationFire ? formatPercent(simulationFire.metrics.return_rate) : "N/A"}
-                  </strong>
-                </div>
-                <div className="goals-metric">
-                  <span>{t.goals.metrics.future1000}</span>
+                  <span>{t.goals.metrics.adjustedReturn}</span>
                   <strong>
                     {simulationFire
-                      ? formatNumber(simulationFire.metrics.future_value_1000, currency)
+                      ? formatPercent(simulationFire.metrics.adjusted_return)
                       : "N/A"}
                   </strong>
                 </div>
                 <div className="goals-metric">
                   <span>{t.goals.metrics.fireTarget}</span>
                   <strong>
-                    {simulationFire && simulationFire.metrics.fire_target
+                    {simulationFire
                       ? formatNumber(simulationFire.metrics.fire_target, currency)
                       : "N/A"}
                   </strong>
@@ -1236,18 +1416,18 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
                 <div className="goals-metric">
                   <span>{t.goals.metrics.coastTarget}</span>
                   <strong>
-                    {simulationFire && simulationFire.metrics.coast_target !== null
+                    {simulationFire
                       ? formatNumber(simulationFire.metrics.coast_target, currency)
                       : "N/A"}
                   </strong>
                 </div>
                 <div className="goals-metric">
-                  <span>{t.goals.metrics.coastTime}</span>
-                  <strong>{formatCoast(simulationFire?.metrics || null)}</strong>
-                </div>
-                <div className="goals-metric">
-                  <span>{t.goals.metrics.fireTime}</span>
-                  <strong>{formatFire(simulationFire?.metrics || null)}</strong>
+                  <span>{t.goals.metrics.coastStatus}</span>
+                  <strong>
+                    {simulationFire
+                      ? formatSimulationCoast(simulationFire.metrics)
+                      : "N/A"}
+                  </strong>
                 </div>
               </div>
             </div>
@@ -1269,9 +1449,9 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
                     <span>{formatAxisValue(0, currency)}</span>
                     <span className="axis-label">{simulationAxis.axisValueLabel}</span>
                   </div>
-                  <div className="goals-chart-plot">
-                    <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-                      <defs>
+                <div className="goals-chart-plot">
+                  <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <defs>
                         <linearGradient id="goalFillSim" x1="0" x2="0" y1="0" y2="1">
                           <stop offset="0%" stopColor="rgba(46, 220, 153, 0.35)" />
                           <stop offset="100%" stopColor="rgba(46, 220, 153, 0)" />
@@ -1286,6 +1466,28 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
                           stroke="#ff6b6b"
                           strokeWidth="0.8"
                         />
+                      ) : null}
+                      {simulationCoastMarker ? (
+                        <>
+                          <line
+                            x1={simulationCoastMarker.x}
+                            y1="0"
+                            x2={simulationCoastMarker.x}
+                            y2="100"
+                            stroke="#4ea1ff"
+                            strokeDasharray="2 2"
+                            strokeWidth="0.8"
+                          />
+                          <text
+                            x={simulationCoastMarker.x}
+                            y="98"
+                            fill="#9aa9bf"
+                            fontSize="4"
+                            textAnchor="middle"
+                          >
+                            {simulationCoastMarker.label}
+                          </text>
+                        </>
                       ) : null}
                       {simulationCoastPath ? (
                         <path
@@ -1322,8 +1524,8 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
                   </div>
                 </div>
                 <div className="goals-chart-x">
-                  <span>{simulationAxis.startYear}</span>
-                  <span>{simulationAxis.endYear}</span>
+                  <span>{simulationAxis.startLabel}</span>
+                  <span>{simulationAxis.endLabel}</span>
                 </div>
                 <p className="goals-chart-axis-label">{simulationAxis.axisYearsLabel}</p>
                 <div className="goals-chart-legend">
@@ -1344,8 +1546,10 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
             )}
           </div>
         </div>
+        ) : null}
         </div>
 
+        {goalViewMode === "portfolio" ? (
         <div className="goals-grid">
           <div className="goals-card">
             <h4>{t.goals.contributions.title}</h4>
@@ -1407,6 +1611,7 @@ function MyGoals({ t, token, portfolio }: GoalsProps) {
             )}
           </div>
         </div>
+        ) : null}
       </div>
     </section>
   );

@@ -37,6 +37,17 @@ type XtbHoldingItem = {
   category?: string | null;
 };
 
+type XtbOperationItem = {
+  source_file: string;
+  ticker?: string | null;
+  operation_type: string;
+  operation_kind?: string | null;
+  description?: string | null;
+  amount?: number | null;
+  trade_date?: string | null;
+  currency?: string | null;
+};
+
 type XtbImportProps = {
   portfolioId: number;
   token: string;
@@ -59,6 +70,7 @@ function XtbImport({
   const [files, setFiles] = useState<File[]>([]);
   const [previewItems, setPreviewItems] = useState<XtbPreviewItem[]>([]);
   const [previewHoldings, setPreviewHoldings] = useState<XtbHoldingItem[]>([]);
+  const [previewOperations, setPreviewOperations] = useState<XtbOperationItem[]>([]);
   const [entries, setEntries] = useState<XtbImportEntry[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -161,9 +173,16 @@ function XtbImport({
             : Number(item.purchase_value) || 0,
         current_price:
           item.current_price === null || item.current_price === undefined
-            ? null
-            : Number(item.current_price) || 0,
+          ? null
+          : Number(item.current_price) || 0,
         category: item.category || "Stocks"
+      }));
+      const operations = (data.operations || []).map((item: XtbOperationItem) => ({
+        ...item,
+        amount:
+          item.amount === null || item.amount === undefined
+            ? null
+            : Number(item.amount) || 0
       }));
       const warningList: string[] = [];
       (data.warnings || []).forEach((warning: { filename: string; warnings: string[] }) => {
@@ -174,6 +193,7 @@ function XtbImport({
       setWarnings(warningList);
       setPreviewItems(items);
       setPreviewHoldings(holdings);
+      setPreviewOperations(operations);
     } catch (err) {
       setError(t.imports.xtb.previewError);
     } finally {
@@ -198,7 +218,11 @@ function XtbImport({
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`
           },
-          body: JSON.stringify({ items: previewItems, holdings: previewHoldings })
+          body: JSON.stringify({
+            items: previewItems,
+            holdings: previewHoldings,
+            operations: previewOperations
+          })
         }
       );
       const data = await response.json();
@@ -209,6 +233,7 @@ function XtbImport({
       setMessage(t.imports.xtb.saveSuccess);
       setPreviewItems([]);
       setPreviewHoldings([]);
+      setPreviewOperations([]);
       setFiles([]);
       await loadEntries();
       onRefresh();

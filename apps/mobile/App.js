@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
-import Svg, { G, Path, Circle, Line } from "react-native-svg";
+import Svg, { G, Path, Circle, Line, Text as SvgText } from "react-native-svg";
 
 const BANKING_DEFAULT_CATEGORY = "Sem categoria";
 const BANKING_DEFAULT_SUBCATEGORY = "Sem subcategoria";
@@ -86,6 +86,7 @@ export default function App() {
   const [goalContributions, setGoalContributions] = useState([]);
   const [goalNameInput, setGoalNameInput] = useState("");
   const [goalRenameInput, setGoalRenameInput] = useState("");
+  const [goalViewMode, setGoalViewMode] = useState("portfolio");
   const [goalForm, setGoalForm] = useState({
     start_date: "",
     duration_years: "",
@@ -96,6 +97,14 @@ export default function App() {
     initial_investment: "",
     inflation_rate: "",
     portfolio_inflation_rate: "",
+    simulation_current_age: "",
+    simulation_retirement_age: "",
+    simulation_annual_spending: "",
+    simulation_current_assets: "",
+    simulation_monthly_contribution: "",
+    simulation_return_rate: "",
+    simulation_inflation_rate: "",
+    simulation_swr: "",
     return_method: "cagr"
   });
   const [goalContributionDate, setGoalContributionDate] = useState("");
@@ -112,6 +121,7 @@ export default function App() {
   const [xtbFiles, setXtbFiles] = useState([]);
   const [xtbItems, setXtbItems] = useState([]);
   const [xtbHoldings, setXtbHoldings] = useState([]);
+  const [xtbOperations, setXtbOperations] = useState([]);
   const [xtbWarnings, setXtbWarnings] = useState([]);
   const [xtbImports, setXtbImports] = useState([]);
   const [xtbPreviewing, setXtbPreviewing] = useState(false);
@@ -180,6 +190,11 @@ export default function App() {
   const [holdingMetaSavingKey, setHoldingMetaSavingKey] = useState(null);
   const [holdingMetaMessage, setHoldingMetaMessage] = useState("");
   const [holdingMetaError, setHoldingMetaError] = useState("");
+  const [holdingTags, setHoldingTags] = useState([]);
+  const [holdingCustomTags, setHoldingCustomTags] = useState([]);
+  const [holdingTagInput, setHoldingTagInput] = useState("");
+  const [holdingTagMessage, setHoldingTagMessage] = useState("");
+  const [holdingTagError, setHoldingTagError] = useState("");
   const [holdingTicker, setHoldingTicker] = useState("");
   const [holdingCompany, setHoldingCompany] = useState("");
   const [holdingOperation, setHoldingOperation] = useState("buy");
@@ -737,18 +752,50 @@ export default function App() {
           inputs.initial_investment !== undefined
             ? String(inputs.initial_investment)
             : "",
-          inflation_rate:
-            inputs.inflation_rate !== undefined
+        inflation_rate:
+          inputs.inflation_rate !== undefined
+            ? String(Number(inputs.inflation_rate) * 100)
+            : "",
+        portfolio_inflation_rate:
+          inputs.portfolio_inflation_rate !== undefined
+            ? String(Number(inputs.portfolio_inflation_rate) * 100)
+            : inputs.inflation_rate !== undefined
               ? String(Number(inputs.inflation_rate) * 100)
               : "",
-          portfolio_inflation_rate:
-            inputs.portfolio_inflation_rate !== undefined
-              ? String(Number(inputs.portfolio_inflation_rate) * 100)
-              : inputs.inflation_rate !== undefined
-                ? String(Number(inputs.inflation_rate) * 100)
-                : "",
-          return_method: inputs.return_method || "cagr"
-        });
+        simulation_current_age:
+          inputs.simulation_current_age !== undefined
+            ? String(inputs.simulation_current_age)
+            : "",
+        simulation_retirement_age:
+          inputs.simulation_retirement_age !== undefined
+            ? String(inputs.simulation_retirement_age)
+            : "",
+        simulation_annual_spending:
+          inputs.simulation_annual_spending !== undefined
+            ? String(inputs.simulation_annual_spending)
+            : "",
+        simulation_current_assets:
+          inputs.simulation_current_assets !== undefined
+            ? String(inputs.simulation_current_assets)
+            : "",
+        simulation_monthly_contribution:
+          inputs.simulation_monthly_contribution !== undefined
+            ? String(inputs.simulation_monthly_contribution)
+            : "",
+        simulation_return_rate:
+          inputs.simulation_return_rate !== undefined
+            ? String(Number(inputs.simulation_return_rate) * 100)
+            : "",
+        simulation_inflation_rate:
+          inputs.simulation_inflation_rate !== undefined
+            ? String(Number(inputs.simulation_inflation_rate) * 100)
+            : "",
+        simulation_swr:
+          inputs.simulation_swr !== undefined
+            ? String(Number(inputs.simulation_swr) * 100)
+            : "",
+        return_method: inputs.return_method || "cagr"
+      });
     } catch (err) {
       setGoalsError("Unable to load goals.");
     } finally {
@@ -770,10 +817,14 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: goalNameInput.trim() })
       });
-      setGoals((prev) => [...prev, data.goal]);
+      setGoals((prev) => [
+        data.goal,
+        ...prev.filter((item) => item.id !== data.goal.id)
+      ]);
       setActiveGoalId(data.goal.id);
       setGoalNameInput("");
       setGoalsMessage("Goal created.");
+      await loadGoalDetails(data.goal.id);
     } catch (err) {
       setGoalsError("Unable to save goal.");
     } finally {
@@ -842,6 +893,16 @@ export default function App() {
     const initial = parseInputNumber(goalForm.initial_investment);
     const inflation = parseInputNumber(goalForm.inflation_rate);
     const portfolioInflation = parseInputNumber(goalForm.portfolio_inflation_rate);
+    const simulationCurrentAge = parseInputNumber(goalForm.simulation_current_age);
+    const simulationRetirementAge = parseInputNumber(goalForm.simulation_retirement_age);
+    const simulationAnnualSpending = parseInputNumber(goalForm.simulation_annual_spending);
+    const simulationCurrentAssets = parseInputNumber(goalForm.simulation_current_assets);
+    const simulationMonthlyContribution = parseInputNumber(
+      goalForm.simulation_monthly_contribution
+    );
+    const simulationReturnRate = parseInputNumber(goalForm.simulation_return_rate);
+    const simulationInflationRate = parseInputNumber(goalForm.simulation_inflation_rate);
+    const simulationSWR = parseInputNumber(goalForm.simulation_swr);
     if (
       !goalForm.start_date ||
       duration === null ||
@@ -851,7 +912,15 @@ export default function App() {
       withdrawal === null ||
       initial === null ||
       inflation === null ||
-      portfolioInflation === null
+      portfolioInflation === null ||
+      simulationCurrentAge === null ||
+      simulationRetirementAge === null ||
+      simulationAnnualSpending === null ||
+      simulationCurrentAssets === null ||
+      simulationMonthlyContribution === null ||
+      simulationReturnRate === null ||
+      simulationInflationRate === null ||
+      simulationSWR === null
     ) {
       setGoalsError("Fill all inputs before saving.");
       return;
@@ -868,14 +937,22 @@ export default function App() {
             duration_years: duration,
             sp500_return: sp500,
             desired_monthly: desired,
-            planned_monthly: planned,
-            withdrawal_rate: withdrawal,
-            initial_investment: initial,
-            inflation_rate: inflation,
-            portfolio_inflation_rate: portfolioInflation,
-            return_method: goalForm.return_method
-          })
-        });
+          planned_monthly: planned,
+          withdrawal_rate: withdrawal,
+          initial_investment: initial,
+          inflation_rate: inflation,
+          portfolio_inflation_rate: portfolioInflation,
+          simulation_current_age: simulationCurrentAge,
+          simulation_retirement_age: simulationRetirementAge,
+          simulation_annual_spending: simulationAnnualSpending,
+          simulation_current_assets: simulationCurrentAssets,
+          simulation_monthly_contribution: simulationMonthlyContribution,
+          simulation_return_rate: simulationReturnRate,
+          simulation_inflation_rate: simulationInflationRate,
+          simulation_swr: simulationSWR,
+          return_method: goalForm.return_method
+        })
+      });
       setGoalsMessage("Inputs saved.");
       loadGoalDetails(activeGoalId);
     } catch (err) {
@@ -1075,12 +1152,89 @@ export default function App() {
           : `/portfolios/${portfolioId}/holdings`;
       const query = params.toString();
       const data = await authJson(`${path}${query ? `?${query}` : ""}`);
-      setHoldingsItems(data.items || []);
+      setHoldingsItems((current) => {
+        const tagMap = new Map(
+          current.map((item) => [
+            String(item.ticker || "").trim().toUpperCase(),
+            item.tags || []
+          ])
+        );
+        return (data.items || []).map((item) => {
+          if (item.tags && item.tags.length) {
+            return item;
+          }
+          const fallback = tagMap.get(
+            String(item.ticker || "").trim().toUpperCase()
+          );
+          return fallback && fallback.length ? { ...item, tags: fallback } : item;
+        });
+      });
       setHoldingsTotal(Number(data.total_value) || 0);
     } catch (err) {
       setHoldingsError("Unable to load holdings.");
     } finally {
       setHoldingsLoading(false);
+    }
+  };
+
+  const loadHoldingTags = async () => {
+    if (!token) {
+      return;
+    }
+    setHoldingTagError("");
+    try {
+      const data = await authJson("/holdings/tags");
+      setHoldingTags(data.items || []);
+      setHoldingCustomTags(data.custom || []);
+    } catch (err) {
+      setHoldingTagError("Unable to load tags.");
+    }
+  };
+
+  const handleAddHoldingTag = async () => {
+    if (!holdingTagInput.trim()) {
+      setHoldingTagError("Tag name is required.");
+      return;
+    }
+    setHoldingTagError("");
+    setHoldingTagMessage("");
+    try {
+      await authJson("/holdings/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: holdingTagInput.trim() })
+      });
+      setHoldingTagInput("");
+      setHoldingTagMessage("Tag added.");
+      await loadHoldingTags();
+    } catch (err) {
+      setHoldingTagError("Unable to save tag.");
+    }
+  };
+
+  const handleDeleteHoldingTag = async (tag) => {
+    setHoldingTagError("");
+    setHoldingTagMessage("");
+    try {
+      await authJson(`/holdings/tags/${encodeURIComponent(tag)}`, {
+        method: "DELETE"
+      });
+      setHoldingTagMessage("Tag removed.");
+      await loadHoldingTags();
+      setHoldingMetaDrafts((current) => {
+        const next = { ...current };
+        Object.keys(next).forEach((key) => {
+          if (next[key]?.tags) {
+            next[key] = {
+              ...next[key],
+              tags: next[key].tags.filter((entry) => entry !== tag)
+            };
+          }
+        });
+        return next;
+      });
+    } catch (err) {
+      setHoldingTagError("Unable to delete tag.");
     }
   };
 
@@ -1703,6 +1857,14 @@ export default function App() {
             : Number(item.current_price) || 0
       }));
       setXtbHoldings(holdings);
+      const operations = (data.operations || []).map((item) => ({
+        ...item,
+        amount:
+          item.amount === null || item.amount === undefined
+            ? null
+            : Number(item.amount) || 0
+      }));
+      setXtbOperations(operations);
       setXtbWarnings(data.warnings || []);
     } catch (err) {
       setXtbError(err.message || "Preview failed.");
@@ -1725,11 +1887,16 @@ export default function App() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ items: xtbItems, holdings: xtbHoldings })
+        body: JSON.stringify({
+          items: xtbItems,
+          holdings: xtbHoldings,
+          operations: xtbOperations
+        })
       });
       setXtbMessage("XTB import saved.");
       setXtbItems([]);
       setXtbHoldings([]);
+      setXtbOperations([]);
       setXtbFiles([]);
       await loadXtbImports(activePortfolio.id);
       await refreshPortfolioData(activePortfolio.id);
@@ -2615,6 +2782,13 @@ export default function App() {
     holdingsInstitution,
     token
   ]);
+
+  useEffect(() => {
+    if (mode !== "home" || homeTab !== "investments") {
+      return;
+    }
+    loadHoldingTags();
+  }, [mode, homeTab, token]);
 
   useEffect(() => {
     if (mode !== "home" || homeTab !== "banking" || !activePortfolio) {
@@ -3591,7 +3765,8 @@ export default function App() {
             sector: item.sector || "",
             industry: item.industry || "",
             country: item.country || "",
-            asset_type: item.asset_type || getAssetType(item.category)
+            asset_type: item.asset_type || getAssetType(item.category),
+            tags: item.tags ? [...item.tags] : []
           }
         };
       });
@@ -3602,6 +3777,19 @@ export default function App() {
         ...current,
         [key]: { ...(current[key] || {}), ...changes }
       }));
+    };
+
+    const toggleHoldingTag = (key, tag) => {
+      setHoldingMetaDrafts((current) => {
+        const draft = current[key] || {};
+        const tags = Array.isArray(draft.tags) ? draft.tags : [];
+        const exists = tags.includes(tag);
+        const nextTags = exists ? tags.filter((item) => item !== tag) : [...tags, tag];
+        return {
+          ...current,
+          [key]: { ...draft, tags: nextTags }
+        };
+      });
     };
 
     const handleMetaSave = async (key, item) => {
@@ -3628,7 +3816,8 @@ export default function App() {
             sector: draft.sector,
             industry: draft.industry,
             country: draft.country,
-            asset_type: draft.asset_type
+            asset_type: draft.asset_type,
+            tags: draft.tags || []
           })
         });
         setHoldingMetaMessage("Holding details saved.");
@@ -3930,7 +4119,8 @@ export default function App() {
               sector: item.sector || "",
               industry: item.industry || "",
               country: item.country || "",
-              asset_type: item.asset_type || getAssetType(item.category)
+              asset_type: item.asset_type || getAssetType(item.category),
+              tags: item.tags ? [...item.tags] : []
             };
             return (
               <TouchableOpacity
@@ -3957,6 +4147,11 @@ export default function App() {
                       </Text>
                     ) : item.category ? (
                       <Text style={styles.metaText}>{item.category}</Text>
+                    ) : null}
+                    {item.tags && item.tags.length ? (
+                      <Text style={styles.metaText}>
+                        Tags: {item.tags.join(", ")}
+                      </Text>
                     ) : null}
                   </View>
                   <View style={styles.holdingRight}>
@@ -4057,6 +4252,63 @@ export default function App() {
                           updateMetaDraft(key, { asset_type: value })
                         }
                       />
+                      <Text style={styles.metaText}>Tags</Text>
+                      {holdingTagMessage ? (
+                        <Text style={styles.message}>{holdingTagMessage}</Text>
+                      ) : null}
+                      {holdingTagError ? (
+                        <Text style={styles.error}>{holdingTagError}</Text>
+                      ) : null}
+                      <View style={styles.tagWrap}>
+                        {holdingTags.map((tag) => {
+                          const active = (metaDraft.tags || []).includes(tag);
+                          const isCustom = holdingCustomTags.some(
+                            (item) => item.toLowerCase() === tag.toLowerCase()
+                          );
+                          return (
+                            <View
+                              key={`${key}-${tag}`}
+                              style={[styles.tagChip, active && styles.tagChipActive]}
+                            >
+                              <TouchableOpacity
+                                onPress={() => toggleHoldingTag(key, tag)}
+                              >
+                                <Text
+                                  style={[
+                                    styles.tagChipText,
+                                    active && styles.tagChipTextActive
+                                  ]}
+                                >
+                                  {tag}
+                                </Text>
+                              </TouchableOpacity>
+                              {isCustom ? (
+                                <TouchableOpacity
+                                  style={styles.tagRemove}
+                                  onPress={() => handleDeleteHoldingTag(tag)}
+                                >
+                                  <Text style={styles.tagRemoveText}>×</Text>
+                                </TouchableOpacity>
+                              ) : null}
+                            </View>
+                          );
+                        })}
+                      </View>
+                      <View style={styles.tagInputRow}>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Add tag"
+                          placeholderTextColor="#6f7f96"
+                          value={holdingTagInput}
+                          onChangeText={setHoldingTagInput}
+                        />
+                        <TouchableOpacity
+                          style={styles.secondaryBtn}
+                          onPress={handleAddHoldingTag}
+                        >
+                          <Text style={styles.secondaryBtnText}>Add</Text>
+                        </TouchableOpacity>
+                      </View>
                       <TouchableOpacity
                         style={styles.secondaryBtn}
                         onPress={() => handleMetaSave(key, item)}
@@ -4985,7 +5237,22 @@ export default function App() {
       }
       return status;
     };
+    const formatPercentValue = (value) => {
+      if (value === null || value === undefined || Number.isNaN(value)) {
+        return "N/A";
+      }
+      return `${Number(value).toFixed(2)}%`;
+    };
     const formatCoast = (metrics) => {
+      if (!metrics) {
+        return "N/A";
+      }
+      return (
+        formatStatus(metrics.coast_status) ||
+        (metrics.coast_years !== null ? `${metrics.coast_years.toFixed(1)}y` : "N/A")
+      );
+    };
+    const formatSimulationCoast = (metrics) => {
       if (!metrics) {
         return "N/A";
       }
@@ -5039,25 +5306,52 @@ export default function App() {
         metrics?.fire_target || 0
       );
       const lastYear = projection.length ? projection[projection.length - 1].year : 0;
+      const startValue = projection.length
+        ? projection[0].age ?? projection[0].year
+        : 0;
+      const endValue = projection.length
+        ? projection[projection.length - 1].age ?? projection[projection.length - 1].year
+        : 0;
+      const usesAge = projection.length ? projection[0].age !== undefined : false;
+      const lastIndex = projection.length - 1;
+      let coastMarkerX = null;
+      let coastMarkerLabel = null;
+      if (projection.length > 1) {
+        for (let i = 0; i < projection.length; i += 1) {
+          const point = projection[i];
+          if (
+            point.without_contrib !== null &&
+            point.coast_target !== null &&
+            point.without_contrib >= point.coast_target
+          ) {
+            coastMarkerX = lastIndex === 0 ? 0 : (i / lastIndex) * 100;
+            const labelValue = point.age ?? point.year;
+            if (labelValue !== undefined && labelValue !== null) {
+              coastMarkerLabel = Number(labelValue).toFixed(0);
+            }
+            break;
+          }
+        }
+      }
       return {
         maxValue,
         lastYear,
         fireTarget: metrics?.fire_target || null,
         withPath: buildPath(projection, "with_contrib", maxValue),
         withoutPath: buildPath(projection, "without_contrib", maxValue),
-        coastPath: buildPath(projection, "coast_target", maxValue)
+        coastPath: buildPath(projection, "coast_target", maxValue),
+        startValue,
+        endValue,
+        usesAge,
+        coastMarkerX,
+        coastMarkerLabel
       };
     };
     const portfolioChart = buildChart(goalProjection, goalMetrics);
     const simulationChart = buildChart(simulationProjection, simulationMetrics);
     const coastLabel = formatCoast(goalMetrics);
     const fireLabel = formatFire(goalMetrics);
-    const simulationCoastLabel = formatCoast(simulationMetrics);
-    const simulationFireLabel = formatFire(simulationMetrics);
-    const simulationInvested =
-      simulationMetrics?.invested_total ??
-      goalMetrics?.invested_total ??
-      null;
+    const simulationCoastLabel = formatSimulationCoast(simulationMetrics);
 
     return (
       <View style={styles.section}>
@@ -5074,6 +5368,20 @@ export default function App() {
             />
             <TouchableOpacity style={styles.secondaryBtn} onPress={handleCreateGoal}>
               <Text style={styles.secondaryBtnText}>Add goal</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={goalViewMode === "simulation" ? styles.primaryBtn : styles.secondaryBtn}
+              onPress={() =>
+                setGoalViewMode((prev) => (prev === "simulation" ? "portfolio" : "simulation"))
+              }
+            >
+              <Text
+                style={
+                  goalViewMode === "simulation" ? styles.primaryText : styles.secondaryBtnText
+                }
+              >
+                Simulation
+              </Text>
             </TouchableOpacity>
             {goal && !goal.is_default ? (
               <TouchableOpacity style={styles.dangerBtn} onPress={handleDeleteGoal}>
@@ -5108,54 +5416,56 @@ export default function App() {
         {goalsMessage ? <Text style={styles.message}>{goalsMessage}</Text> : null}
         {goalsError ? <Text style={styles.error}>{goalsError}</Text> : null}
 
-        <View style={styles.importCard}>
-          <View style={styles.importHeader}>
-            <View>
-              <Text style={styles.importTitle}>Portfolio FIRE</Text>
-              <Text style={styles.sectionSubtitle}>
-                Based on your contribution history.
-              </Text>
-            </View>
-          </View>
-          {goal && !goal.is_default ? (
-            <View style={styles.goalRow}>
-              <TextInput
-                style={styles.input}
-                placeholder="Rename goal"
-                placeholderTextColor="#6f7f96"
-                value={goalRenameInput}
-                onChangeText={setGoalRenameInput}
-              />
-              <TouchableOpacity style={styles.secondaryBtn} onPress={handleRenameGoal}>
-                <Text style={styles.secondaryBtnText}>Rename</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.dangerBtn} onPress={handleDeleteGoal}>
-                <Text style={styles.dangerText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-          <View style={styles.field}>
-            <Text style={styles.label}>Start date</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#6f7f96"
-              value={goalForm.start_date}
-              onChangeText={(value) =>
-                setGoalForm((prev) => ({ ...prev, start_date: value }))
-              }
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Duration (years)</Text>
-            <TextInput
-              style={styles.input}
-              value={goalForm.duration_years}
-              onChangeText={(value) =>
-                setGoalForm((prev) => ({ ...prev, duration_years: value }))
-              }
-            />
-          </View>
+        {goalViewMode === "portfolio" ? (
+          <>
+            <View style={styles.importCard}>
+              <View style={styles.importHeader}>
+                <View>
+                  <Text style={styles.importTitle}>Portfolio FIRE</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Based on your contribution history.
+                  </Text>
+                </View>
+              </View>
+              {goal && !goal.is_default ? (
+                <View style={styles.goalRow}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Rename goal"
+                    placeholderTextColor="#6f7f96"
+                    value={goalRenameInput}
+                    onChangeText={setGoalRenameInput}
+                  />
+                  <TouchableOpacity style={styles.secondaryBtn} onPress={handleRenameGoal}>
+                    <Text style={styles.secondaryBtnText}>Rename</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.dangerBtn} onPress={handleDeleteGoal}>
+                    <Text style={styles.dangerText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              <View style={styles.field}>
+                <Text style={styles.label}>Start date</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#6f7f96"
+                  value={goalForm.start_date}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, start_date: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Duration (years)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.duration_years}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, duration_years: value }))
+                  }
+                />
+              </View>
               <View style={styles.field}>
                 <Text style={styles.label}>Expected portfolio % gains</Text>
                 <TextInput
@@ -5176,83 +5486,103 @@ export default function App() {
                   }
                 />
               </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Safe withdrawal rate (%)</Text>
-            <TextInput
-              style={styles.input}
-              value={goalForm.withdrawal_rate}
-              onChangeText={(value) =>
-                setGoalForm((prev) => ({ ...prev, withdrawal_rate: value }))
-              }
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Initial investment</Text>
-            <TextInput
-              style={styles.input}
-              value={goalForm.initial_investment}
-              onChangeText={(value) =>
-                setGoalForm((prev) => ({ ...prev, initial_investment: value }))
-              }
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Return method</Text>
-            <View style={styles.goalToggleRow}>
-              <TouchableOpacity
-                style={[
-                  styles.goalToggleBtn,
-                  goalForm.return_method === "cagr" && styles.goalToggleActive
-                ]}
-                onPress={() =>
-                  setGoalForm((prev) => ({ ...prev, return_method: "cagr" }))
-                }
-              >
-                <Text
-                  style={[
-                    styles.goalToggleText,
-                    goalForm.return_method === "cagr" && styles.goalToggleTextActive
-                  ]}
-                >
-                  CAGR
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.goalToggleBtn,
-                  goalForm.return_method === "xirr" && styles.goalToggleActive
-                ]}
-                onPress={() =>
-                  setGoalForm((prev) => ({ ...prev, return_method: "xirr" }))
-                }
-              >
-                <Text
-                  style={[
-                    styles.goalToggleText,
-                    goalForm.return_method === "xirr" && styles.goalToggleTextActive
-                  ]}
-                >
-                  XIRR
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.field}>
+                <Text style={styles.label}>Planned monthly contribution</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.planned_monthly}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, planned_monthly: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Value invested</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.initial_investment}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, initial_investment: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Safe withdrawal rate (%)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.withdrawal_rate}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, withdrawal_rate: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Initial investment</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.initial_investment}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, initial_investment: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Return method</Text>
+                <View style={styles.goalToggleRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.goalToggleBtn,
+                      goalForm.return_method === "cagr" && styles.goalToggleActive
+                    ]}
+                    onPress={() =>
+                      setGoalForm((prev) => ({ ...prev, return_method: "cagr" }))
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.goalToggleText,
+                        goalForm.return_method === "cagr" && styles.goalToggleTextActive
+                      ]}
+                    >
+                      CAGR
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.goalToggleBtn,
+                      goalForm.return_method === "xirr" && styles.goalToggleActive
+                    ]}
+                    onPress={() =>
+                      setGoalForm((prev) => ({ ...prev, return_method: "xirr" }))
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.goalToggleText,
+                        goalForm.return_method === "xirr" && styles.goalToggleTextActive
+                      ]}
+                    >
+                      XIRR
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>ECB inflation (10Y avg)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.portfolio_inflation_rate}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, portfolio_inflation_rate: value }))
+                  }
+                />
+              </View>
+              <View style={styles.buttonRow}>
+                <TouchableOpacity style={styles.primaryBtn} onPress={handleSaveGoalInputs}>
+                  <Text style={styles.primaryText}>Save inputs</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-            <View style={styles.field}>
-              <Text style={styles.label}>ECB inflation (10Y avg)</Text>
-              <TextInput
-                style={styles.input}
-                value={goalForm.portfolio_inflation_rate}
-                onChangeText={(value) =>
-                  setGoalForm((prev) => ({ ...prev, portfolio_inflation_rate: value }))
-                }
-              />
-            </View>
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleSaveGoalInputs}>
-              <Text style={styles.primaryText}>Save inputs</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
         <View style={styles.importCard}>
           <Text style={styles.sectionTitle}>Portfolio results</Text>
@@ -5370,6 +5700,30 @@ export default function App() {
                           strokeWidth="0.8"
                         />
                       ) : null}
+                      {portfolioChart.coastMarkerX !== null ? (
+                        <>
+                          <Line
+                            x1={portfolioChart.coastMarkerX}
+                            y1="0"
+                            x2={portfolioChart.coastMarkerX}
+                            y2="100"
+                            stroke="#4ea1ff"
+                            strokeDasharray="2 2"
+                            strokeWidth="0.8"
+                          />
+                          {portfolioChart.coastMarkerLabel ? (
+                            <SvgText
+                              x={portfolioChart.coastMarkerX}
+                              y="98"
+                              fill="#9aa9bf"
+                              fontSize="4"
+                              textAnchor="middle"
+                            >
+                              {portfolioChart.coastMarkerLabel}
+                            </SvgText>
+                          ) : null}
+                        </>
+                      ) : null}
                       {portfolioChart.coastPath ? (
                         <Path
                           d={portfolioChart.coastPath}
@@ -5399,10 +5753,12 @@ export default function App() {
                   </View>
                 </View>
                 <View style={styles.goalChartXAxis}>
-                  <Text style={styles.goalAxisText}>0</Text>
-                  <Text style={styles.goalAxisText}>{portfolioChart.lastYear}</Text>
+                  <Text style={styles.goalAxisText}>{portfolioChart.startValue}</Text>
+                  <Text style={styles.goalAxisText}>{portfolioChart.endValue}</Text>
                 </View>
-                <Text style={styles.goalXAxisLabel}>Years</Text>
+                <Text style={styles.goalXAxisLabel}>
+                  {portfolioChart.usesAge ? "Age (years)" : "Years"}
+                </Text>
                 <View style={styles.goalChartLegend}>
                   <View style={styles.goalLegendItem}>
                     <View
@@ -5438,378 +5794,362 @@ export default function App() {
               <Text style={styles.subtitle}>No projection data yet.</Text>
             )}
         </View>
+          </>
+        ) : null}
 
-        <View style={styles.importCard}>
-          <Text style={styles.sectionTitle}>FIRE Simulation Playground</Text>
-          <Text style={styles.subtitle}>Adjust assumptions to simulate scenarios.</Text>
-          <View style={styles.field}>
-            <Text style={styles.label}>Start date</Text>
-            <TextInput
-              style={styles.input}
-              value={goalForm.start_date}
-              onChangeText={(value) =>
-                setGoalForm((prev) => ({ ...prev, start_date: value }))
-              }
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#6f7f96"
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Desired monthly amount</Text>
-            <TextInput
-              style={styles.input}
-              value={goalForm.desired_monthly}
-              onChangeText={(value) =>
-                setGoalForm((prev) => ({ ...prev, desired_monthly: value }))
-              }
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Planned monthly contribution</Text>
-            <TextInput
-              style={styles.input}
-              value={goalForm.planned_monthly}
-              onChangeText={(value) =>
-                setGoalForm((prev) => ({ ...prev, planned_monthly: value }))
-              }
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Value invested</Text>
-            <TextInput
-              style={styles.input}
-              value={goalForm.initial_investment}
-              onChangeText={(value) =>
-                setGoalForm((prev) => ({ ...prev, initial_investment: value }))
-              }
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Duration (years)</Text>
-            <TextInput
-              style={styles.input}
-              value={goalForm.duration_years}
-              onChangeText={(value) =>
-                setGoalForm((prev) => ({ ...prev, duration_years: value }))
-              }
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Expected portfolio % gains</Text>
-            <TextInput
-              style={styles.input}
-              value={goalForm.sp500_return}
-              onChangeText={(value) =>
-                setGoalForm((prev) => ({ ...prev, sp500_return: value }))
-              }
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Safe withdrawal rate (%)</Text>
-            <TextInput
-              style={styles.input}
-              value={goalForm.withdrawal_rate}
-              onChangeText={(value) =>
-                setGoalForm((prev) => ({ ...prev, withdrawal_rate: value }))
-              }
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Initial investment</Text>
-            <TextInput
-              style={styles.input}
-              value={goalForm.initial_investment}
-              onChangeText={(value) =>
-                setGoalForm((prev) => ({ ...prev, initial_investment: value }))
-              }
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Return method</Text>
-            <View style={styles.goalToggleRow}>
-              <TouchableOpacity
-                style={[
-                  styles.goalToggle,
-                  goalForm.return_method === "cagr" && styles.goalToggleActive
-                ]}
-                onPress={() => setGoalForm((prev) => ({ ...prev, return_method: "cagr" }))}
-              >
-                <Text
-                  style={[
-                    styles.goalToggleText,
-                    goalForm.return_method === "cagr" && styles.goalToggleTextActive
-                  ]}
-                >
-                  CAGR
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.goalToggle,
-                  goalForm.return_method === "xirr" && styles.goalToggleActive
-                ]}
-                onPress={() => setGoalForm((prev) => ({ ...prev, return_method: "xirr" }))}
-              >
-                <Text
-                  style={[
-                    styles.goalToggleText,
-                    goalForm.return_method === "xirr" && styles.goalToggleTextActive
-                  ]}
-                >
-                  XIRR
-                </Text>
-              </TouchableOpacity>
+        {goalViewMode === "simulation" ? (
+          <>
+            <View style={styles.importCard}>
+              <Text style={styles.sectionTitle}>FIRE Simulation Playground</Text>
+              <Text style={styles.subtitle}>Adjust assumptions to simulate scenarios.</Text>
+              <View style={styles.field}>
+                <Text style={styles.label}>Current age</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_current_age}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, simulation_current_age: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Retirement age</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_retirement_age}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, simulation_retirement_age: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Annual spending in retirement</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_annual_spending}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, simulation_annual_spending: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Current invested assets</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_current_assets}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, simulation_current_assets: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Monthly contribution</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_monthly_contribution}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({
+                      ...prev,
+                      simulation_monthly_contribution: value
+                    }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Investment rate of return (%)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_return_rate}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, simulation_return_rate: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Inflation rate (%)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_inflation_rate}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, simulation_inflation_rate: value }))
+                  }
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Safe withdrawal rate (%)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={goalForm.simulation_swr}
+                  onChangeText={(value) =>
+                    setGoalForm((prev) => ({ ...prev, simulation_swr: value }))
+                  }
+                />
+              </View>
+              <View style={styles.buttonRow}>
+                <TouchableOpacity style={styles.primaryBtn} onPress={handleSaveGoalInputs}>
+                  <Text style={styles.primaryText}>Save inputs</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Inflation</Text>
-            <TextInput
-              style={styles.input}
-              value={goalForm.inflation_rate}
-              onChangeText={(value) =>
-                setGoalForm((prev) => ({ ...prev, inflation_rate: value }))
-              }
-            />
-          </View>
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleSaveGoalInputs}>
-              <Text style={styles.primaryText}>Save inputs</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
-        <View style={styles.importCard}>
-          <Text style={styles.sectionTitle}>Simulation results</Text>
-          {simulationMetrics ? (
-            <View style={styles.metricRow}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Years elapsed</Text>
-                <Text style={styles.metricValue}>
-                  {simulationMetrics.years_elapsed.toFixed(1)}
-                </Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Years remaining</Text>
-                <Text style={styles.metricValue}>
-                  {simulationMetrics.years_remaining.toFixed(1)}
-                </Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Planned monthly</Text>
-                <Text style={styles.metricValue}>
-                  {formatCurrency(simulationMetrics.avg_monthly)}
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <Text style={styles.subtitle}>No simulation data yet.</Text>
-          )}
-          {simulationMetrics ? (
-            <View style={styles.metricRow}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Invested</Text>
-                <Text style={styles.metricValue}>
-                  {formatCurrency(simulationMetrics.invested_total)}
-                </Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Return</Text>
-                <Text style={styles.metricValue}>
-                  {simulationMetrics.assumption_return === null
-                    ? simulationMetrics.return_rate === null
-                      ? "N/A"
-                      : `${simulationMetrics.return_rate.toFixed(2)}%`
-                    : `${simulationMetrics.assumption_return.toFixed(2)}%`}
-                </Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>XIRR/CAGR result</Text>
-                <Text style={styles.metricValue}>
-                  {simulationMetrics.return_rate === null
-                    ? "N/A"
-                    : `${simulationMetrics.return_rate.toFixed(2)}%`}
-                </Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>FIRE target</Text>
-                <Text style={styles.metricValue}>
-                  {simulationMetrics.fire_target === null
-                    ? "N/A"
-                    : formatCurrency(simulationMetrics.fire_target)}
-                </Text>
-              </View>
-            </View>
-          ) : null}
-          {simulationMetrics ? (
-            <View style={styles.metricRow}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Coast FIRE number</Text>
-                <Text style={styles.metricValue}>
-                  {simulationMetrics.coast_target === null
-                    ? "N/A"
-                    : formatCurrency(simulationMetrics.coast_target)}
-                </Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Years to Coast FIRE</Text>
-                <Text style={styles.metricValue}>{simulationCoastLabel}</Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>FIRE timing</Text>
-                <Text style={styles.metricValue}>{simulationFireLabel}</Text>
-              </View>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.chartCard}>
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Simulation projection</Text>
-            <Text style={styles.chartSubtitle}>Based on desired monthly amount.</Text>
-          </View>
-            {simulationProjection.length ? (
-              <>
-                <View style={styles.goalChartBody}>
-                  <View style={styles.goalChartAxis}>
-                    <Text style={styles.goalAxisText}>
-                      {formatAxisCurrency(simulationChart.maxValue)}
-                    </Text>
-                    <Text style={styles.goalAxisText}>
-                      {formatAxisCurrency(simulationChart.maxValue / 2)}
-                    </Text>
-                    <Text style={styles.goalAxisText}>{formatAxisCurrency(0)}</Text>
-                    <Text style={styles.goalAxisLabel}>
-                      Value ({activePortfolio?.currency || "EUR"})
-                    </Text>
+            <View style={styles.importCard}>
+              <Text style={styles.sectionTitle}>Simulation results</Text>
+              {simulationMetrics ? (
+                <>
+                  <View style={styles.metricRow}>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Years to retire</Text>
+                      <Text style={styles.metricValue}>
+                        {simulationMetrics.years_to_retire.toFixed(1)}
+                      </Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Annual spending</Text>
+                      <Text style={styles.metricValue}>
+                        {formatCurrency(simulationMetrics.annual_spending)}
+                      </Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Current assets</Text>
+                      <Text style={styles.metricValue}>
+                        {formatCurrency(simulationMetrics.current_assets)}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.goalChartPlot}>
+                  <View style={styles.metricRow}>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Monthly contribution</Text>
+                      <Text style={styles.metricValue}>
+                        {formatCurrency(simulationMetrics.monthly_contribution)}
+                      </Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Investment return</Text>
+                      <Text style={styles.metricValue}>
+                        {formatPercentValue(simulationMetrics.investment_return)}
+                      </Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Inflation-adjusted return</Text>
+                      <Text style={styles.metricValue}>
+                        {formatPercentValue(simulationMetrics.adjusted_return)}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.metricRow}>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>FIRE target</Text>
+                      <Text style={styles.metricValue}>
+                        {simulationMetrics.fire_target === null
+                          ? "N/A"
+                          : formatCurrency(simulationMetrics.fire_target)}
+                      </Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Coast FIRE number</Text>
+                      <Text style={styles.metricValue}>
+                        {simulationMetrics.coast_target === null
+                          ? "N/A"
+                          : formatCurrency(simulationMetrics.coast_target)}
+                      </Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Coast status</Text>
+                      <Text style={styles.metricValue}>{simulationCoastLabel}</Text>
+                    </View>
+                  </View>
+                </>
+              ) : (
+                <Text style={styles.subtitle}>No simulation data yet.</Text>
+              )}
+            </View>
+
+            <View style={styles.chartCard}>
+              <View style={styles.chartHeader}>
+                <Text style={styles.chartTitle}>Simulation projection</Text>
+                <Text style={styles.chartSubtitle}>
+                  Based on retirement age and inflation-adjusted returns.
+                </Text>
+              </View>
+              {simulationProjection.length ? (
+                <>
+                  <View style={styles.goalChartBody}>
+                    <View style={styles.goalChartAxis}>
+                      <Text style={styles.goalAxisText}>
+                        {formatAxisCurrency(simulationChart.maxValue)}
+                      </Text>
+                      <Text style={styles.goalAxisText}>
+                        {formatAxisCurrency(simulationChart.maxValue / 2)}
+                      </Text>
+                      <Text style={styles.goalAxisText}>{formatAxisCurrency(0)}</Text>
+                      <Text style={styles.goalAxisLabel}>
+                        Value ({activePortfolio?.currency || "EUR"})
+                      </Text>
+                    </View>
+                    <View style={styles.goalChartPlot}>
                     <Svg viewBox="0 0 100 100" width="100%" height={160}>
                       {simulationChart.fireTarget ? (
                         <Line
                           x1="0"
-                          y1={100 - (simulationChart.fireTarget / simulationChart.maxValue) * 100}
+                          y1={
+                              100 -
+                              (simulationChart.fireTarget / simulationChart.maxValue) * 100
+                            }
                           x2="100"
-                          y2={100 - (simulationChart.fireTarget / simulationChart.maxValue) * 100}
+                          y2={
+                              100 -
+                              (simulationChart.fireTarget / simulationChart.maxValue) * 100
+                            }
                           stroke="#ff6b6b"
                           strokeWidth="0.8"
                         />
+                      ) : null}
+                      {simulationChart.coastMarkerX !== null ? (
+                        <>
+                          <Line
+                            x1={simulationChart.coastMarkerX}
+                            y1="0"
+                            x2={simulationChart.coastMarkerX}
+                            y2="100"
+                            stroke="#4ea1ff"
+                            strokeDasharray="2 2"
+                            strokeWidth="0.8"
+                          />
+                          {simulationChart.coastMarkerLabel ? (
+                            <SvgText
+                              x={simulationChart.coastMarkerX}
+                              y="98"
+                              fill="#9aa9bf"
+                              fontSize="4"
+                              textAnchor="middle"
+                            >
+                              {simulationChart.coastMarkerLabel}
+                            </SvgText>
+                          ) : null}
+                        </>
                       ) : null}
                       {simulationChart.coastPath ? (
                         <Path
                           d={simulationChart.coastPath}
                           stroke="#4ea1ff"
                           strokeDasharray="4 3"
-                          strokeWidth={1.1}
-                          fill="none"
-                        />
-                      ) : null}
-                      {simulationChart.withoutPath ? (
-                        <Path
-                          d={simulationChart.withoutPath}
-                          stroke="#2ad68d"
-                          strokeWidth={1.4}
-                          fill="none"
-                        />
-                      ) : null}
-                      {simulationChart.withPath ? (
-                        <Path
-                          d={simulationChart.withPath}
-                          stroke="#9aa9bf"
-                          strokeWidth={1.1}
-                          fill="none"
-                        />
-                      ) : null}
-                    </Svg>
+                            strokeWidth={1.1}
+                            fill="none"
+                          />
+                        ) : null}
+                        {simulationChart.withoutPath ? (
+                          <Path
+                            d={simulationChart.withoutPath}
+                            stroke="#2ad68d"
+                            strokeWidth={1.4}
+                            fill="none"
+                          />
+                        ) : null}
+                        {simulationChart.withPath ? (
+                          <Path
+                            d={simulationChart.withPath}
+                            stroke="#9aa9bf"
+                            strokeWidth={1.1}
+                            fill="none"
+                          />
+                        ) : null}
+                      </Svg>
+                    </View>
                   </View>
-                </View>
-                <View style={styles.goalChartXAxis}>
-                  <Text style={styles.goalAxisText}>0</Text>
-                  <Text style={styles.goalAxisText}>{simulationChart.lastYear}</Text>
-                </View>
-                <Text style={styles.goalXAxisLabel}>Years</Text>
-                <View style={styles.goalChartLegend}>
-                  <View style={styles.goalLegendItem}>
-                    <View
-                      style={[styles.goalLegendDot, { backgroundColor: "#9aa9bf" }]}
-                    />
-                    <Text style={styles.goalLegendText}>
-                      Net worth with continued contributions
-                    </Text>
+                  <View style={styles.goalChartXAxis}>
+                    <Text style={styles.goalAxisText}>{simulationChart.startValue}</Text>
+                    <Text style={styles.goalAxisText}>{simulationChart.endValue}</Text>
                   </View>
-                  <View style={styles.goalLegendItem}>
-                    <View
-                      style={[styles.goalLegendDot, { backgroundColor: "#2ad68d" }]}
-                    />
-                    <Text style={styles.goalLegendText}>
-                      Net worth with no contributions after Coast FIRE milestone
-                    </Text>
+                  <Text style={styles.goalXAxisLabel}>
+                    {simulationChart.usesAge ? "Age (years)" : "Years"}
+                  </Text>
+                  <View style={styles.goalChartLegend}>
+                    <View style={styles.goalLegendItem}>
+                      <View
+                        style={[styles.goalLegendDot, { backgroundColor: "#9aa9bf" }]}
+                      />
+                      <Text style={styles.goalLegendText}>
+                        Net worth with continued contributions
+                      </Text>
+                    </View>
+                    <View style={styles.goalLegendItem}>
+                      <View
+                        style={[styles.goalLegendDot, { backgroundColor: "#2ad68d" }]}
+                      />
+                      <Text style={styles.goalLegendText}>
+                        Net worth with no contributions after Coast FIRE milestone
+                      </Text>
+                    </View>
+                    <View style={styles.goalLegendItem}>
+                      <View
+                        style={[styles.goalLegendDot, { backgroundColor: "#4ea1ff" }]}
+                      />
+                      <Text style={styles.goalLegendText}>Coast FIRE number</Text>
+                    </View>
+                    <View style={styles.goalLegendItem}>
+                      <View
+                        style={[styles.goalLegendDot, { backgroundColor: "#ff6b6b" }]}
+                      />
+                      <Text style={styles.goalLegendText}>FIRE number</Text>
+                    </View>
                   </View>
-                  <View style={styles.goalLegendItem}>
-                    <View
-                      style={[styles.goalLegendDot, { backgroundColor: "#4ea1ff" }]}
-                    />
-                    <Text style={styles.goalLegendText}>Coast FIRE number</Text>
-                  </View>
-                  <View style={styles.goalLegendItem}>
-                    <View
-                      style={[styles.goalLegendDot, { backgroundColor: "#ff6b6b" }]}
-                    />
-                    <Text style={styles.goalLegendText}>FIRE number</Text>
-                  </View>
-                </View>
-              </>
-            ) : (
-              <Text style={styles.subtitle}>No projection data yet.</Text>
-            )}
-        </View>
+                </>
+              ) : (
+                <Text style={styles.subtitle}>No projection data yet.</Text>
+              )}
+            </View>
+          </>
+        ) : null}
 
-        <View style={styles.importCard}>
-          <Text style={styles.sectionTitle}>Contributions</Text>
-          <View style={styles.field}>
-            <Text style={styles.label}>Date</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#6f7f96"
-              value={goalContributionDate}
-              onChangeText={setGoalContributionDate}
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Amount</Text>
-            <TextInput
-              style={styles.input}
-              value={goalContributionAmount}
-              onChangeText={setGoalContributionAmount}
-            />
-          </View>
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={styles.primaryBtn}
-              onPress={handleAddGoalContribution}
-            >
-              <Text style={styles.primaryText}>Add contribution</Text>
-            </TouchableOpacity>
-          </View>
-          {goalContributions.length ? (
-            goalContributions.map((item) => (
-              <View style={styles.previewRow} key={`goal-${item.id}`}>
-                <View>
-                  <Text style={styles.previewTitle}>{item.contribution_date}</Text>
-                  <Text style={styles.metaText}>{formatCurrency(item.amount)}</Text>
+        {goalViewMode === "portfolio" ? (
+          <View style={styles.importCard}>
+            <Text style={styles.sectionTitle}>Contributions</Text>
+            <View style={styles.field}>
+              <Text style={styles.label}>Date</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#6f7f96"
+                value={goalContributionDate}
+                onChangeText={setGoalContributionDate}
+              />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>Amount</Text>
+              <TextInput
+                style={styles.input}
+                value={goalContributionAmount}
+                onChangeText={setGoalContributionAmount}
+              />
+            </View>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={handleAddGoalContribution}
+              >
+                <Text style={styles.primaryText}>Add contribution</Text>
+              </TouchableOpacity>
+            </View>
+            {goalContributions.length ? (
+              goalContributions.map((item) => (
+                <View style={styles.previewRow} key={`goal-${item.id}`}>
+                  <View>
+                    <Text style={styles.previewTitle}>{item.contribution_date}</Text>
+                    <Text style={styles.metaText}>{formatCurrency(item.amount)}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.dangerBtn}
+                    onPress={() => handleDeleteGoalContribution(item.id)}
+                  >
+                    <Text style={styles.dangerText}>Delete</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  style={styles.dangerBtn}
-                  onPress={() => handleDeleteGoalContribution(item.id)}
-                >
-                  <Text style={styles.dangerText}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          ) : (
-            <Text style={styles.subtitle}>No contributions yet.</Text>
-          )}
-        </View>
+              ))
+            ) : (
+              <Text style={styles.subtitle}>No contributions yet.</Text>
+            )}
+          </View>
+        ) : null}
       </View>
     );
   };
@@ -7491,6 +7831,52 @@ const styles = StyleSheet.create({
   holdingMeta: {
     marginTop: 8,
     gap: 6
+  },
+  tagWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6
+  },
+  tagChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    gap: 6
+  },
+  tagChipActive: {
+    borderColor: "rgba(42,214,141,0.45)",
+    backgroundColor: "rgba(42,214,141,0.2)"
+  },
+  tagChipText: {
+    color: "#dfe7f3",
+    fontSize: 11,
+    fontWeight: "600"
+  },
+  tagChipTextActive: {
+    color: "#2ad68d"
+  },
+  tagRemove: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,120,120,0.6)",
+    backgroundColor: "rgba(255,120,120,0.12)"
+  },
+  tagRemoveText: {
+    color: "#ff9c9c",
+    fontWeight: "700",
+    fontSize: 12
+  },
+  tagInputRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center"
   },
   chartCard: {
     marginTop: 6,

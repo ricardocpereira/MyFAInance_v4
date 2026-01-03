@@ -75,6 +75,11 @@ export const translations = {
         tickerPlaceholder: "Search ticker",
         all: "All"
       },
+      tableTitle: "Holdings & activity",
+      tableViews: {
+        holdings: "Holdings",
+        operations: "Operations"
+      },
       columns: {
         holding: "Holding",
         portfolio: "Portfolio",
@@ -82,7 +87,23 @@ export const translations = {
         costBasis: "Cost basis",
         currentValue: "Current value",
         totalProfit: "Total profit",
-        share: "Share in portfolio"
+        share: "Share in portfolio",
+        tags: "Tags"
+      },
+      operations: {
+        loading: "Loading operations...",
+        loadError: "Unable to load operations.",
+        empty: "No operations yet.",
+        columns: {
+          date: "Date",
+          type: "Type",
+          ticker: "Ticker",
+          description: "Description",
+          amount: "Amount",
+          source: "Source file",
+          tags: "Tags",
+          actions: "Actions"
+        }
       },
       tooltips: {
         costBasis:
@@ -105,6 +126,17 @@ export const translations = {
         saveError: "Unable to save holding details.",
         cancel: "Cancel",
         noPortfolio: "Select a portfolio first."
+      },
+      tags: {
+        label: "Tags",
+        placeholder: "Add tag",
+        add: "Add",
+        created: "Tag added.",
+        deleted: "Tag removed.",
+        required: "Tag name is required.",
+        loadError: "Unable to load tags.",
+        saveError: "Unable to save tag.",
+        deleteError: "Unable to delete tag."
       },
       chart: {
         title: "Holdings performance",
@@ -541,6 +573,7 @@ export const translations = {
       resultsTitle: "Results",
       saveInputs: "Save inputs",
       inputError: "Fill all inputs before saving.",
+      simulation: "Simulation",
       sections: {
         portfolio: {
           title: "Portfolio FIRE",
@@ -556,7 +589,7 @@ export const translations = {
           inputs: "Simulation inputs",
           results: "Simulation results",
           chartTitle: "Simulation projection",
-          chartSubtitle: "Projection based on your desired monthly amount."
+          chartSubtitle: "Projection based on retirement age and inflation-adjusted returns."
         }
       },
         inputs: {
@@ -570,7 +603,14 @@ export const translations = {
           valueInvested: "Value invested",
           inflation: "Expected inflation (%)",
           ecbInflation: "ECB inflation (10Y avg)",
-          returnMethod: "Return method"
+          returnMethod: "Return method",
+          currentAge: "Current age",
+          retirementAge: "Retirement age",
+          annualSpending: "Annual spending in retirement",
+          currentAssets: "Current invested assets",
+          monthlyContribution: "Monthly contribution",
+          investmentReturn: "Investment rate of return (%)",
+          safeWithdrawalRate: "Safe withdrawal rate (%)"
         },
         metrics: {
         yearsElapsed: "Years elapsed",
@@ -585,8 +625,15 @@ export const translations = {
         fireTarget: "FIRE target",
           coastTarget: "Coast FIRE number",
           coastTime: "Years to Coast FIRE",
+          coastStatus: "Coast status",
           fireTime: "Time to FIRE",
-          years: "years"
+          years: "years",
+          yearsToRetire: "Years to retirement",
+          annualSpending: "Annual spending",
+          currentAssets: "Current assets",
+          monthlyContribution: "Monthly contribution",
+          investmentReturn: "Investment return",
+          adjustedReturn: "Inflation-adjusted return"
         },
       status: {
         missing: "Missing target",
@@ -607,6 +654,7 @@ export const translations = {
           fireLine: "FIRE number",
           axisValue: "Value ({currency})",
           axisYears: "Years",
+          axisAge: "Age (years)",
           empty: "No projection data yet."
         },
       contributions: {
@@ -854,6 +902,11 @@ export const translations = {
         tickerPlaceholder: "Pesquisar ticker",
         all: "Todos"
       },
+      tableTitle: "Holdings e atividade",
+      tableViews: {
+        holdings: "Holdings",
+        operations: "Operacoes"
+      },
       columns: {
         holding: "Holding",
         portfolio: "Portfolio",
@@ -861,7 +914,23 @@ export const translations = {
         costBasis: "Cost basis",
         currentValue: "Valor atual",
         totalProfit: "Lucro total",
-        share: "Peso no portfolio"
+        share: "Peso no portfolio",
+        tags: "Tags"
+      },
+      operations: {
+        loading: "A carregar operacoes...",
+        loadError: "Nao foi possivel carregar operacoes.",
+        empty: "Sem operacoes.",
+        columns: {
+          date: "Data",
+          type: "Tipo",
+          ticker: "Ticker",
+          description: "Descricao",
+          amount: "Montante",
+          source: "Ficheiro",
+          tags: "Tags",
+          actions: "Acoes"
+        }
       },
       tooltips: {
         costBasis:
@@ -884,6 +953,17 @@ export const translations = {
         saveError: "Nao foi possivel guardar detalhes.",
         cancel: "Cancelar",
         noPortfolio: "Selecione um portfolio."
+      },
+      tags: {
+        label: "Tags",
+        placeholder: "Adicionar tag",
+        add: "Adicionar",
+        created: "Tag adicionada.",
+        deleted: "Tag removida.",
+        required: "Nome da tag obrigatorio.",
+        loadError: "Nao foi possivel carregar tags.",
+        saveError: "Nao foi possivel guardar tag.",
+        deleteError: "Nao foi possivel apagar tag."
       },
       chart: {
         title: "Performance das holdings",
@@ -1320,6 +1400,7 @@ export const translations = {
       resultsTitle: "Resultados",
       saveInputs: "Guardar inputs",
       inputError: "Preencha todos os campos antes de guardar.",
+      simulation: "Simulacao",
       sections: {
         portfolio: {
           title: "Portfolio FIRE",
@@ -1335,7 +1416,7 @@ export const translations = {
           inputs: "Inputs de simulacao",
           results: "Resultados da simulacao",
           chartTitle: "Projecao simulada",
-          chartSubtitle: "Projecao baseada no valor mensal desejado."
+          chartSubtitle: "Projecao baseada na idade de reforma e retorno ajustado a inflacao."
         }
       },
         inputs: {
@@ -1349,7 +1430,14 @@ export const translations = {
           valueInvested: "Valor investido",
           inflation: "Inflacao esperada (%)",
           ecbInflation: "Inflacao BCE (media 10 anos)",
-          returnMethod: "Metodo de rentabilidade"
+          returnMethod: "Metodo de rentabilidade",
+          currentAge: "Idade atual",
+          retirementAge: "Idade de reforma",
+          annualSpending: "Gasto anual na reforma",
+          currentAssets: "Ativos investidos atuais",
+          monthlyContribution: "Aporte mensal",
+          investmentReturn: "Taxa de retorno do investimento (%)",
+          safeWithdrawalRate: "Taxa de levantamento seguro (%)"
         },
         metrics: {
         yearsElapsed: "Anos decorridos",
@@ -1364,8 +1452,15 @@ export const translations = {
         fireTarget: "Patrimonio FIRE",
           coastTarget: "Numero Coast FIRE",
           coastTime: "Anos ate Coast FIRE",
+          coastStatus: "Estado Coast",
           fireTime: "Tempo ate FIRE",
-          years: "anos"
+          years: "anos",
+          yearsToRetire: "Anos ate reforma",
+          annualSpending: "Gasto anual",
+          currentAssets: "Ativos atuais",
+          monthlyContribution: "Aporte mensal",
+          investmentReturn: "Retorno do investimento",
+          adjustedReturn: "Retorno ajustado a inflacao"
         },
       status: {
         missing: "Meta em falta",
@@ -1386,6 +1481,7 @@ export const translations = {
           fireLine: "Numero FIRE",
           axisValue: "Valor ({currency})",
           axisYears: "Anos",
+          axisAge: "Idade (anos)",
           empty: "Sem dados de projecao."
         },
       contributions: {
@@ -1633,6 +1729,11 @@ export const translations = {
         tickerPlaceholder: "Buscar ticker",
         all: "Todos"
       },
+      tableTitle: "Holdings y actividad",
+      tableViews: {
+        holdings: "Holdings",
+        operations: "Operaciones"
+      },
       columns: {
         holding: "Holding",
         portfolio: "Portfolio",
@@ -1640,7 +1741,23 @@ export const translations = {
         costBasis: "Cost basis",
         currentValue: "Valor actual",
         totalProfit: "Ganancia total",
-        share: "Peso en portfolio"
+        share: "Peso en portfolio",
+        tags: "Tags"
+      },
+      operations: {
+        loading: "Cargando operaciones...",
+        loadError: "No se pudieron cargar operaciones.",
+        empty: "Sin operaciones.",
+        columns: {
+          date: "Fecha",
+          type: "Tipo",
+          ticker: "Ticker",
+          description: "Descripcion",
+          amount: "Monto",
+          source: "Archivo",
+          tags: "Tags",
+          actions: "Acciones"
+        }
       },
       tooltips: {
         costBasis:
@@ -1663,6 +1780,17 @@ export const translations = {
         saveError: "No se pudieron guardar detalles.",
         cancel: "Cancelar",
         noPortfolio: "Seleccione un portfolio."
+      },
+      tags: {
+        label: "Tags",
+        placeholder: "Agregar tag",
+        add: "Agregar",
+        created: "Tag añadida.",
+        deleted: "Tag eliminada.",
+        required: "Nombre de tag requerido.",
+        loadError: "No se pudieron cargar tags.",
+        saveError: "No se pudo guardar tag.",
+        deleteError: "No se pudo eliminar tag."
       },
       chart: {
         title: "Performance de holdings",
@@ -2099,6 +2227,7 @@ export const translations = {
       resultsTitle: "Resultados",
       saveInputs: "Guardar inputs",
       inputError: "Completa todos los campos antes de guardar.",
+      simulation: "Simulacion",
       sections: {
         portfolio: {
           title: "Portfolio FIRE",
@@ -2114,7 +2243,7 @@ export const translations = {
           inputs: "Inputs de simulacion",
           results: "Resultados de simulacion",
           chartTitle: "Proyeccion simulada",
-          chartSubtitle: "Proyeccion basada en el valor mensual deseado."
+          chartSubtitle: "Proyeccion basada en la edad de retiro y retorno ajustado a inflacion."
         }
       },
       inputs: {
@@ -2128,7 +2257,14 @@ export const translations = {
         valueInvested: "Valor invertido",
         inflation: "Inflacion esperada (%)",
         ecbInflation: "Inflacion BCE (promedio 10 anos)",
-        returnMethod: "Metodo de rentabilidad"
+        returnMethod: "Metodo de rentabilidad",
+        currentAge: "Edad actual",
+        retirementAge: "Edad de retiro",
+        annualSpending: "Gasto anual en retiro",
+        currentAssets: "Activos invertidos actuales",
+        monthlyContribution: "Aporte mensual",
+        investmentReturn: "Tasa de retorno de inversion (%)",
+        safeWithdrawalRate: "Tasa de retiro segura (%)"
       },
       metrics: {
         yearsElapsed: "Anos transcurridos",
@@ -2143,8 +2279,15 @@ export const translations = {
         fireTarget: "Meta FIRE",
         coastTarget: "Numero Coast FIRE",
         coastTime: "Anos hasta Coast FIRE",
+        coastStatus: "Estado Coast",
         fireTime: "Tiempo hasta FIRE",
-        years: "anos"
+        years: "anos",
+        yearsToRetire: "Anos hasta retiro",
+        annualSpending: "Gasto anual",
+        currentAssets: "Activos actuales",
+        monthlyContribution: "Aporte mensual",
+        investmentReturn: "Retorno de inversion",
+        adjustedReturn: "Retorno ajustado a inflacion"
       },
       status: {
         missing: "Meta pendiente",
@@ -2165,6 +2308,7 @@ export const translations = {
           fireLine: "Numero FIRE",
           axisValue: "Valor ({currency})",
           axisYears: "Anos",
+          axisAge: "Edad (anos)",
           empty: "Sin datos de proyeccion."
         },
       contributions: {

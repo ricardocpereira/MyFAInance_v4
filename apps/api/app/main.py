@@ -40,6 +40,56 @@ EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 CODE_TTL_MINUTES = 10
 SESSION_TTL_HOURS = 24
 DEFAULT_CATEGORIES = ["Cash", "Emergency Funds", "Retirement Plans", "Stocks"]
+DEFAULT_INVESTMENT_TAGS = [
+    "ETF",
+    "Value Stocks",
+    "Dividends",
+    "REITs",
+    "Emerging Markets",
+    "Children Future",
+]
+KNOWN_ETF_TICKERS = {
+    "XAIX.DE",
+    "VUAA.DE",
+    "VWCE.DE",
+    "IS3N.DE",
+    "NQSE.DE",
+    "DFEN.DE",
+    "SXR8.DE",
+    "SXRV.DE",
+    "XESC.DE",
+    "XDWT.DE",
+    "EUNL.DE",
+    "QDVI.DE",
+    "RBOT.UK",
+    "DGTL.UK",
+    "EGLN.UK",
+    "EMEC.DE",
+    "ESIH.DE",
+    "ESIT.DE",
+    "IMAE.NL",
+    "IESE.NL",
+    "IDVY.NL",
+    "GOAI.DE",
+    "HDLV.DE",
+    "LSMC.DE",
+    "WTEM.DE",
+    "VVSM.DE",
+    "VGWD.DE",
+    "FLXI.DE",
+    "CBRS.DE",
+    "CEMS.DE",
+    "SEC0.DE",
+    "SDGPEX.DE",
+    "ASWC.DE",
+}
+KNOWN_REIT_TICKERS = {
+    "ARE",
+    "ARE.US",
+    "VICI.US",
+    "CUBE.US",
+}
+MAX_TAG_LENGTH = 40
 ALLOWED_CURRENCIES = {"EUR", "USD", "GBP"}
 PRICE_API_PROVIDER = os.getenv("PRICE_API_PROVIDER", "twelvedata").lower()
 PRICE_API_KEY = os.getenv("PRICE_API_KEY", "")
@@ -281,6 +331,18 @@ class HoldingImportItem(BaseModel):
 class XtbImportCommitRequest(BaseModel):
     items: list[XtbImportItem]
     holdings: list[HoldingImportItem] | None = None
+    operations: list["HoldingOperationItem"] | None = None
+
+
+class HoldingOperationItem(BaseModel):
+    source_file: str
+    ticker: str | None = None
+    operation_type: str
+    operation_kind: str | None = None
+    description: str | None = None
+    amount: float | None = None
+    trade_date: str | None = None
+    currency: str | None = None
 
 
 class HoldingTransactionRequest(BaseModel):
@@ -302,6 +364,11 @@ class HoldingMetadataRequest(BaseModel):
     industry: str | None = None
     country: str | None = None
     asset_type: str | None = None
+    tags: list[str] | None = None
+
+
+class TagRequest(BaseModel):
+    name: str
 
 
 class PriceRefreshRequest(BaseModel):
@@ -364,6 +431,14 @@ class GoalInputRequest(BaseModel):
     inflation_rate: float | None = None
     portfolio_inflation_rate: float | None = None
     return_method: str | None = None
+    simulation_current_age: float | None = None
+    simulation_retirement_age: float | None = None
+    simulation_annual_spending: float | None = None
+    simulation_current_assets: float | None = None
+    simulation_monthly_contribution: float | None = None
+    simulation_return_rate: float | None = None
+    simulation_inflation_rate: float | None = None
+    simulation_swr: float | None = None
 
 
 class GoalContributionRequest(BaseModel):
@@ -472,6 +547,14 @@ def _init_db() -> None:
                 initial_investment REAL NOT NULL,
                 inflation_rate REAL NOT NULL,
                 portfolio_inflation_rate REAL,
+                simulation_current_age REAL,
+                simulation_retirement_age REAL,
+                simulation_annual_spending REAL,
+                simulation_current_assets REAL,
+                simulation_monthly_contribution REAL,
+                simulation_return_rate REAL,
+                simulation_inflation_rate REAL,
+                simulation_swr REAL,
                 return_method TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -665,6 +748,34 @@ def _init_db() -> None:
                 updated_at TEXT NOT NULL,
                 UNIQUE(portfolio_id, ticker)
             );
+            CREATE TABLE IF NOT EXISTS investment_tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_email TEXT NOT NULL,
+                name TEXT NOT NULL,
+                name_key TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(owner_email, name_key)
+            );
+            CREATE TABLE IF NOT EXISTS holding_tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                ticker TEXT NOT NULL,
+                tag_name TEXT NOT NULL,
+                tag_key TEXT NOT NULL,
+                source TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(portfolio_id, ticker, tag_key)
+            );
+            CREATE TABLE IF NOT EXISTS holding_tag_suppressed (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                ticker TEXT NOT NULL,
+                tag_key TEXT NOT NULL,
+                removed_at TEXT NOT NULL,
+                UNIQUE(portfolio_id, ticker, tag_key)
+            );
             CREATE TABLE IF NOT EXISTS holding_transactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 portfolio_id INTEGER NOT NULL,
@@ -678,6 +789,20 @@ def _init_db() -> None:
                 fee REAL,
                 note TEXT,
                 category TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS holdings_operations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                import_id INTEGER,
+                portfolio_id INTEGER NOT NULL,
+                source_file TEXT,
+                operation_type TEXT NOT NULL,
+                operation_kind TEXT,
+                ticker TEXT,
+                description TEXT,
+                amount REAL,
+                currency TEXT,
+                trade_date TEXT,
                 created_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS portfolio_category_settings (
@@ -1018,6 +1143,14 @@ def _goal_default_inputs() -> dict:
         "initial_investment": 0.0,
         "inflation_rate": 0.03,
         "portfolio_inflation_rate": default_ecb,
+        "simulation_current_age": 30.0,
+        "simulation_retirement_age": 67.0,
+        "simulation_annual_spending": 30000.0,
+        "simulation_current_assets": 100000.0,
+        "simulation_monthly_contribution": 500.0,
+        "simulation_return_rate": 0.07,
+        "simulation_inflation_rate": 0.03,
+        "simulation_swr": 0.04,
         "return_method": "cagr",
     }
 
@@ -1045,6 +1178,26 @@ def _ecb_inflation_10y_avg() -> float | None:
     return value
 
 
+def _ensure_goal_input_columns(conn: sqlite3.Connection) -> None:
+    columns = conn.execute("PRAGMA table_info(goal_inputs)").fetchall()
+    column_names = {row["name"] for row in columns}
+    required = [
+        "portfolio_inflation_rate",
+        "planned_monthly",
+        "simulation_current_age",
+        "simulation_retirement_age",
+        "simulation_annual_spending",
+        "simulation_current_assets",
+        "simulation_monthly_contribution",
+        "simulation_return_rate",
+        "simulation_inflation_rate",
+        "simulation_swr",
+    ]
+    for name in required:
+        if name not in column_names:
+            conn.execute(f"ALTER TABLE goal_inputs ADD COLUMN {name} REAL")
+
+
 def _parse_iso_date(value: str) -> date:
     try:
         return datetime.fromisoformat(value).date()
@@ -1054,10 +1207,7 @@ def _parse_iso_date(value: str) -> date:
 
 def _ensure_default_goal(email: str) -> None:
     with _db_connection() as conn:
-        columns = conn.execute("PRAGMA table_info(goal_inputs)").fetchall()
-        column_names = {row["name"] for row in columns}
-        if "portfolio_inflation_rate" not in column_names:
-            conn.execute("ALTER TABLE goal_inputs ADD COLUMN portfolio_inflation_rate REAL")
+        _ensure_goal_input_columns(conn)
         row = conn.execute(
             "SELECT id FROM goals WHERE owner_email = ? AND is_default = 1",
             (email,),
@@ -1087,10 +1237,18 @@ def _ensure_default_goal(email: str) -> None:
                 initial_investment,
                 inflation_rate,
                 portfolio_inflation_rate,
+                simulation_current_age,
+                simulation_retirement_age,
+                simulation_annual_spending,
+                simulation_current_assets,
+                simulation_monthly_contribution,
+                simulation_return_rate,
+                simulation_inflation_rate,
+                simulation_swr,
                 return_method,
                 updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 goal_id,
@@ -1103,6 +1261,14 @@ def _ensure_default_goal(email: str) -> None:
                 defaults["initial_investment"],
                 defaults["inflation_rate"],
                 defaults["portfolio_inflation_rate"],
+                defaults["simulation_current_age"],
+                defaults["simulation_retirement_age"],
+                defaults["simulation_annual_spending"],
+                defaults["simulation_current_assets"],
+                defaults["simulation_monthly_contribution"],
+                defaults["simulation_return_rate"],
+                defaults["simulation_inflation_rate"],
+                defaults["simulation_swr"],
                 defaults["return_method"],
                 now,
             ),
@@ -1154,10 +1320,7 @@ def _create_goal(email: str, name: str) -> dict:
         ).fetchone()
         if exists:
             raise HTTPException(status_code=400, detail="Goal name already exists.")
-        columns = conn.execute("PRAGMA table_info(goal_inputs)").fetchall()
-        column_names = {row["name"] for row in columns}
-        if "portfolio_inflation_rate" not in column_names:
-            conn.execute("ALTER TABLE goal_inputs ADD COLUMN portfolio_inflation_rate REAL")
+        _ensure_goal_input_columns(conn)
         conn.execute(
             """
             INSERT INTO goals (owner_email, name, is_default, created_at, updated_at)
@@ -1180,10 +1343,18 @@ def _create_goal(email: str, name: str) -> dict:
                 initial_investment,
                 inflation_rate,
                 portfolio_inflation_rate,
+                simulation_current_age,
+                simulation_retirement_age,
+                simulation_annual_spending,
+                simulation_current_assets,
+                simulation_monthly_contribution,
+                simulation_return_rate,
+                simulation_inflation_rate,
+                simulation_swr,
                 return_method,
                 updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 goal_id,
@@ -1196,6 +1367,14 @@ def _create_goal(email: str, name: str) -> dict:
                 defaults["initial_investment"],
                 defaults["inflation_rate"],
                 defaults["portfolio_inflation_rate"],
+                defaults["simulation_current_age"],
+                defaults["simulation_retirement_age"],
+                defaults["simulation_annual_spending"],
+                defaults["simulation_current_assets"],
+                defaults["simulation_monthly_contribution"],
+                defaults["simulation_return_rate"],
+                defaults["simulation_inflation_rate"],
+                defaults["simulation_swr"],
                 defaults["return_method"],
                 now,
             ),
@@ -1244,11 +1423,21 @@ def _delete_goal(email: str, goal_id: int) -> bool:
 def _get_goal_inputs(goal_id: int) -> dict:
     defaults = _goal_default_inputs()
     with _db_connection() as conn:
+        _ensure_goal_input_columns(conn)
         row = conn.execute(
             """
             SELECT start_date, duration_years, sp500_return, desired_monthly, planned_monthly,
                    withdrawal_rate, initial_investment, inflation_rate,
-                   portfolio_inflation_rate, return_method, updated_at
+                   portfolio_inflation_rate,
+                   simulation_current_age,
+                   simulation_retirement_age,
+                   simulation_annual_spending,
+                   simulation_current_assets,
+                   simulation_monthly_contribution,
+                   simulation_return_rate,
+                   simulation_inflation_rate,
+                   simulation_swr,
+                   return_method, updated_at
             FROM goal_inputs
             WHERE goal_id = ?
             """,
@@ -1269,10 +1458,18 @@ def _get_goal_inputs(goal_id: int) -> dict:
                     initial_investment,
                     inflation_rate,
                     portfolio_inflation_rate,
+                    simulation_current_age,
+                    simulation_retirement_age,
+                    simulation_annual_spending,
+                    simulation_current_assets,
+                    simulation_monthly_contribution,
+                    simulation_return_rate,
+                    simulation_inflation_rate,
+                    simulation_swr,
                     return_method,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     goal_id,
@@ -1285,6 +1482,14 @@ def _get_goal_inputs(goal_id: int) -> dict:
                     defaults["initial_investment"],
                     defaults["inflation_rate"],
                     defaults["portfolio_inflation_rate"],
+                    defaults["simulation_current_age"],
+                    defaults["simulation_retirement_age"],
+                    defaults["simulation_annual_spending"],
+                    defaults["simulation_current_assets"],
+                    defaults["simulation_monthly_contribution"],
+                    defaults["simulation_return_rate"],
+                    defaults["simulation_inflation_rate"],
+                    defaults["simulation_swr"],
                     defaults["return_method"],
                     now,
                 ),
@@ -1307,6 +1512,46 @@ def _get_goal_inputs(goal_id: int) -> dict:
             float(row["portfolio_inflation_rate"])
             if row["portfolio_inflation_rate"] is not None
             else defaults["portfolio_inflation_rate"]
+        ),
+        "simulation_current_age": (
+            float(row["simulation_current_age"])
+            if row["simulation_current_age"] is not None
+            else defaults["simulation_current_age"]
+        ),
+        "simulation_retirement_age": (
+            float(row["simulation_retirement_age"])
+            if row["simulation_retirement_age"] is not None
+            else defaults["simulation_retirement_age"]
+        ),
+        "simulation_annual_spending": (
+            float(row["simulation_annual_spending"])
+            if row["simulation_annual_spending"] is not None
+            else defaults["simulation_annual_spending"]
+        ),
+        "simulation_current_assets": (
+            float(row["simulation_current_assets"])
+            if row["simulation_current_assets"] is not None
+            else defaults["simulation_current_assets"]
+        ),
+        "simulation_monthly_contribution": (
+            float(row["simulation_monthly_contribution"])
+            if row["simulation_monthly_contribution"] is not None
+            else defaults["simulation_monthly_contribution"]
+        ),
+        "simulation_return_rate": (
+            float(row["simulation_return_rate"])
+            if row["simulation_return_rate"] is not None
+            else defaults["simulation_return_rate"]
+        ),
+        "simulation_inflation_rate": (
+            float(row["simulation_inflation_rate"])
+            if row["simulation_inflation_rate"] is not None
+            else defaults["simulation_inflation_rate"]
+        ),
+        "simulation_swr": (
+            float(row["simulation_swr"])
+            if row["simulation_swr"] is not None
+            else defaults["simulation_swr"]
         ),
         "return_method": row["return_method"],
         "updated_at": row["updated_at"],
@@ -1342,6 +1587,46 @@ def _update_goal_inputs(goal_id: int, payload: GoalInputRequest) -> dict:
         if payload.portfolio_inflation_rate is not None
         else current["portfolio_inflation_rate"]
     )
+    simulation_current_age = (
+        payload.simulation_current_age
+        if payload.simulation_current_age is not None
+        else current["simulation_current_age"]
+    )
+    simulation_retirement_age = (
+        payload.simulation_retirement_age
+        if payload.simulation_retirement_age is not None
+        else current["simulation_retirement_age"]
+    )
+    simulation_annual_spending = (
+        payload.simulation_annual_spending
+        if payload.simulation_annual_spending is not None
+        else current["simulation_annual_spending"]
+    )
+    simulation_current_assets = (
+        payload.simulation_current_assets
+        if payload.simulation_current_assets is not None
+        else current["simulation_current_assets"]
+    )
+    simulation_monthly_contribution = (
+        payload.simulation_monthly_contribution
+        if payload.simulation_monthly_contribution is not None
+        else current["simulation_monthly_contribution"]
+    )
+    simulation_return_rate = _normalize_rate(
+        payload.simulation_return_rate
+        if payload.simulation_return_rate is not None
+        else current["simulation_return_rate"]
+    )
+    simulation_inflation_rate = _normalize_rate(
+        payload.simulation_inflation_rate
+        if payload.simulation_inflation_rate is not None
+        else current["simulation_inflation_rate"]
+    )
+    simulation_swr = _normalize_rate(
+        payload.simulation_swr
+        if payload.simulation_swr is not None
+        else current["simulation_swr"]
+    )
     return_method = (payload.return_method or current["return_method"]).lower()
     if return_method not in {"xirr", "cagr"}:
         return_method = "cagr"
@@ -1358,6 +1643,25 @@ def _update_goal_inputs(goal_id: int, payload: GoalInputRequest) -> dict:
         )
     if initial_investment < 0:
         raise HTTPException(status_code=400, detail="Initial investment cannot be negative.")
+    if simulation_current_age < 0:
+        raise HTTPException(status_code=400, detail="Current age must be zero or greater.")
+    if simulation_retirement_age <= simulation_current_age:
+        raise HTTPException(
+            status_code=400,
+            detail="Retirement age must be greater than current age."
+        )
+    if simulation_annual_spending < 0:
+        raise HTTPException(
+            status_code=400, detail="Annual spending must be zero or greater."
+        )
+    if simulation_current_assets < 0:
+        raise HTTPException(
+            status_code=400, detail="Current assets cannot be negative."
+        )
+    if simulation_monthly_contribution < 0:
+        raise HTTPException(
+            status_code=400, detail="Monthly contribution must be zero or greater."
+        )
     if sp500_return is None or sp500_return < -0.99:
         raise HTTPException(status_code=400, detail="Return rate must be greater than -99%.")
     if inflation_rate is None or inflation_rate < -0.99:
@@ -1365,6 +1669,20 @@ def _update_goal_inputs(goal_id: int, payload: GoalInputRequest) -> dict:
     if portfolio_inflation_rate is None or portfolio_inflation_rate < -0.99:
         raise HTTPException(
             status_code=400, detail="Portfolio inflation rate must be greater than -99%."
+        )
+    if simulation_return_rate is None or simulation_return_rate < -0.99:
+        raise HTTPException(
+            status_code=400, detail="Simulation return rate must be greater than -99%."
+        )
+    if simulation_inflation_rate is None or simulation_inflation_rate < -0.99:
+        raise HTTPException(
+            status_code=400,
+            detail="Simulation inflation rate must be greater than -99%.",
+        )
+    if simulation_swr is None or simulation_swr <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Simulation safe withdrawal rate must be greater than 0.",
         )
     _parse_iso_date(start_date)
     now = datetime.utcnow().isoformat()
@@ -1382,10 +1700,18 @@ def _update_goal_inputs(goal_id: int, payload: GoalInputRequest) -> dict:
                 initial_investment,
                 inflation_rate,
                 portfolio_inflation_rate,
+                simulation_current_age,
+                simulation_retirement_age,
+                simulation_annual_spending,
+                simulation_current_assets,
+                simulation_monthly_contribution,
+                simulation_return_rate,
+                simulation_inflation_rate,
+                simulation_swr,
                 return_method,
                 updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 goal_id,
@@ -1398,6 +1724,14 @@ def _update_goal_inputs(goal_id: int, payload: GoalInputRequest) -> dict:
                 initial_investment,
                 inflation_rate,
                 portfolio_inflation_rate,
+                simulation_current_age,
+                simulation_retirement_age,
+                simulation_annual_spending,
+                simulation_current_assets,
+                simulation_monthly_contribution,
+                simulation_return_rate,
+                simulation_inflation_rate,
+                simulation_swr,
                 return_method,
                 now,
             ),
@@ -1614,6 +1948,14 @@ def _goal_summary(
     portfolio_inflation_rate = float(
         inputs.get("portfolio_inflation_rate") or inflation_rate
     )
+    simulation_current_age = float(inputs.get("simulation_current_age"))
+    simulation_retirement_age = float(inputs.get("simulation_retirement_age"))
+    simulation_annual_spending = float(inputs.get("simulation_annual_spending"))
+    simulation_current_assets = float(inputs.get("simulation_current_assets"))
+    simulation_monthly_contribution = float(inputs.get("simulation_monthly_contribution"))
+    simulation_return_rate = float(inputs.get("simulation_return_rate"))
+    simulation_inflation_rate = float(inputs.get("simulation_inflation_rate"))
+    simulation_swr = float(inputs.get("simulation_swr"))
     contributions = _list_goal_contributions(goal_id)
     if contributions:
         latest_contribution = max(
@@ -1667,12 +2009,15 @@ def _goal_summary(
     return_rate = None
     if rate_method == "xirr":
         flows: list[tuple[date, float]] = []
+        if initial_investment > 0:
+            flows.append((start_date, -initial_investment))
         for item in past_contributions:
             flows.append((_parse_iso_date(item["contribution_date"]), -item["amount"]))
-        flows.append((now_date, xirr_value))
-        result = _xirr(flows)
-        if result is not None:
-            return_rate = result * 100
+        if flows:
+            flows.append((now_date, xirr_value))
+            result = _xirr(flows)
+            if result is not None:
+                return_rate = result * 100
     else:
         if invested_total_to_date > 0 and current_value > 0 and years_elapsed > 0:
             return_rate = (
@@ -1799,6 +2144,129 @@ def _goal_summary(
             "projection": projection,
         }
 
+    def build_walletburst_section() -> dict:
+        current_age = max(0.0, simulation_current_age)
+        retirement_age = max(current_age, simulation_retirement_age)
+        years_to_retire = max(0.0, retirement_age - current_age)
+        annual_spending = max(0.0, simulation_annual_spending)
+        current_assets = max(0.0, simulation_current_assets)
+        monthly_contribution = max(0.0, simulation_monthly_contribution)
+        invest_rate = min(max(simulation_return_rate, -0.99), 1.0)
+        infl_rate = min(max(simulation_inflation_rate, -0.99), 1.0)
+        swr_rate = min(max(simulation_swr, 0.0), 1.0)
+        adjusted_return = min(max(invest_rate - infl_rate, -0.99), 1.0)
+
+        fire_target = None
+        if swr_rate > 0:
+            fire_target = annual_spending / swr_rate
+
+        coast_target = None
+        if fire_target is not None:
+            if years_to_retire <= 0 or adjusted_return == 0:
+                coast_target = fire_target
+            else:
+                coast_target = fire_target / ((1 + adjusted_return) ** years_to_retire)
+
+        rm = 0.0
+        if adjusted_return != 0:
+            rm = (1 + adjusted_return) ** (1 / 12) - 1
+        t_months = int(round(years_to_retire * 12))
+
+        coast_months = None
+        coast_status = "ok"
+        value_at_coast = None
+        if fire_target is None:
+            coast_status = "missing"
+        else:
+            if current_assets >= fire_target:
+                coast_months = 0
+                coast_status = "achieved"
+            elif t_months <= 0:
+                coast_status = "imp"
+            else:
+                found = None
+                if rm == 0:
+                    for month in range(1, t_months + 1):
+                        balance = current_assets + monthly_contribution * month
+                        if balance >= fire_target:
+                            found = month
+                            break
+                else:
+                    for month in range(1, t_months + 1):
+                        balance = current_assets * (1 + rm) ** month + monthly_contribution * (
+                            ((1 + rm) ** month - 1) / rm
+                        )
+                        value_future = balance * (1 + rm) ** (t_months - month)
+                        if value_future >= fire_target:
+                            found = month
+                            break
+                if found is not None:
+                    coast_months = found
+                else:
+                    coast_status = "imp"
+        if coast_months is not None:
+            if rm == 0:
+                value_at_coast = current_assets + monthly_contribution * coast_months
+            else:
+                value_at_coast = current_assets * (1 + rm) ** coast_months + monthly_contribution * (
+                    ((1 + rm) ** coast_months - 1) / rm
+                )
+
+        projection = []
+        years_steps = int(math.floor(years_to_retire))
+        for year in range(years_steps + 1):
+            months = year * 12
+            if rm == 0:
+                with_contrib = current_assets + monthly_contribution * months
+            else:
+                with_contrib = current_assets * (1 + rm) ** months + monthly_contribution * (
+                    ((1 + rm) ** months - 1) / rm
+                )
+            without_contrib = None
+            if coast_months is not None and value_at_coast is not None:
+                if months <= coast_months:
+                    without_contrib = with_contrib
+                else:
+                    without_contrib = value_at_coast * (1 + rm) ** (months - coast_months)
+            coast_target_point = None
+            if fire_target is not None:
+                years_left = years_to_retire - year
+                if years_left < 0:
+                    years_left = 0
+                if adjusted_return == 0:
+                    coast_target_point = fire_target
+                else:
+                    coast_target_point = fire_target / ((1 + adjusted_return) ** years_left)
+            projection.append(
+                {
+                    "year": year,
+                    "age": current_age + year,
+                    "with_contrib": with_contrib,
+                    "without_contrib": without_contrib,
+                    "coast_target": coast_target_point,
+                }
+            )
+
+        return {
+            "metrics": {
+                "current_age": current_age,
+                "retirement_age": retirement_age,
+                "years_to_retire": years_to_retire,
+                "annual_spending": annual_spending,
+                "current_assets": current_assets,
+                "monthly_contribution": monthly_contribution,
+                "investment_return": invest_rate * 100,
+                "inflation_rate": infl_rate,
+                "swr": swr_rate,
+                "adjusted_return": adjusted_return * 100,
+                "fire_target": fire_target,
+                "coast_target": coast_target,
+                "coast_years": coast_months / 12 if coast_months is not None else None,
+                "coast_status": coast_status,
+            },
+            "projection": projection,
+        }
+
     inflation_portfolio = portfolio_inflation_rate or _ecb_inflation_10y_avg() or inflation_rate
     portfolio_section = build_section(
         invested_total,
@@ -1808,14 +2276,7 @@ def _goal_summary(
         desired_monthly,
         current_value,
     )
-    simulation_section = build_section(
-        initial_investment,
-        planned_monthly,
-        inflation_rate,
-        expected_return,
-        desired_monthly,
-        initial_investment,
-    )
+    simulation_section = build_walletburst_section()
 
     return {
         "inputs": inputs,
@@ -2144,6 +2605,245 @@ def _normalize_optional_text(value: str | None) -> str | None:
         return None
     text = str(value).strip()
     return text if text else None
+
+
+def _normalize_tag_name(value: str | None) -> tuple[str, str]:
+    if value is None:
+        return ("", "")
+    cleaned = " ".join(str(value).strip().split())
+    if not cleaned:
+        return ("", "")
+    return cleaned, _normalize_text(cleaned)
+
+
+def _list_custom_investment_tags(owner_email: str) -> list[str]:
+    with _db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT name
+            FROM investment_tags
+            WHERE owner_email = ?
+            ORDER BY name_key
+            """,
+            (owner_email,),
+        ).fetchall()
+    return [row["name"] for row in rows]
+
+
+def _list_investment_tags(owner_email: str) -> dict:
+    custom_tags = _list_custom_investment_tags(owner_email)
+    combined = {tag.lower(): tag for tag in DEFAULT_INVESTMENT_TAGS}
+    for tag in custom_tags:
+        combined[_normalize_text(tag)] = tag
+    ordered = [combined[key] for key in sorted(combined.keys())]
+    return {"items": ordered, "custom": custom_tags}
+
+
+def _save_investment_tag(owner_email: str, tag_name: str) -> dict:
+    cleaned, tag_key = _normalize_tag_name(tag_name)
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="Tag name is required.")
+    if len(cleaned) > MAX_TAG_LENGTH:
+        raise HTTPException(status_code=400, detail="Tag name is too long.")
+    if tag_key in {_normalize_text(tag) for tag in DEFAULT_INVESTMENT_TAGS}:
+        raise HTTPException(status_code=400, detail="Tag already exists.")
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        try:
+            conn.execute(
+                """
+                INSERT INTO investment_tags (owner_email, name, name_key, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (owner_email, cleaned, tag_key, now, now),
+            )
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=400, detail="Tag already exists.")
+    return {"name": cleaned, "created_at": now}
+
+
+def _delete_investment_tag(owner_email: str, tag_name: str) -> None:
+    cleaned, tag_key = _normalize_tag_name(tag_name)
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="Tag name is required.")
+    if tag_key in {_normalize_text(tag) for tag in DEFAULT_INVESTMENT_TAGS}:
+        raise HTTPException(status_code=400, detail="Default tags cannot be removed.")
+    with _db_connection() as conn:
+        conn.execute(
+            "DELETE FROM investment_tags WHERE owner_email = ? AND name_key = ?",
+            (owner_email, tag_key),
+        )
+        conn.execute(
+            "DELETE FROM holding_tags WHERE portfolio_id IN (SELECT id FROM portfolios WHERE owner_email = ?) AND tag_key = ?",
+            (owner_email, tag_key),
+        )
+
+
+def _list_holding_tags(portfolio_id: int) -> dict[str, list[str]]:
+    with _db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT ticker, tag_name
+            FROM holding_tags
+            WHERE portfolio_id = ?
+            ORDER BY tag_key
+            """,
+            (portfolio_id,),
+        ).fetchall()
+    tags: dict[str, list[str]] = {}
+    for row in rows:
+        tags.setdefault(row["ticker"].upper(), []).append(row["tag_name"])
+    return tags
+
+
+def _list_suppressed_tags(portfolio_id: int) -> dict[str, set[str]]:
+    with _db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT ticker, tag_key
+            FROM holding_tag_suppressed
+            WHERE portfolio_id = ?
+            """,
+            (portfolio_id,),
+        ).fetchall()
+    suppressed: dict[str, set[str]] = {}
+    for row in rows:
+        suppressed.setdefault(row["ticker"].upper(), set()).add(row["tag_key"])
+    return suppressed
+
+
+def _set_holding_tags(portfolio_id: int, ticker: str, tags: list[str]) -> list[str]:
+    ticker_key = ticker.strip().upper()
+    desired: dict[str, str] = {}
+    for tag in tags:
+        cleaned, tag_key = _normalize_tag_name(tag)
+        if not cleaned:
+            continue
+        desired[tag_key] = cleaned
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        existing = conn.execute(
+            """
+            SELECT tag_name, tag_key, source
+            FROM holding_tags
+            WHERE portfolio_id = ? AND ticker = ?
+            """,
+            (portfolio_id, ticker_key),
+        ).fetchall()
+        existing_keys = {row["tag_key"] for row in existing}
+        to_remove = [row for row in existing if row["tag_key"] not in desired]
+        if to_remove:
+            conn.executemany(
+                """
+                DELETE FROM holding_tags
+                WHERE portfolio_id = ? AND ticker = ? AND tag_key = ?
+                """,
+                [(portfolio_id, ticker_key, row["tag_key"]) for row in to_remove],
+            )
+            suppressed = [
+                (portfolio_id, ticker_key, row["tag_key"], now)
+                for row in to_remove
+                if row["source"] == "auto"
+            ]
+            if suppressed:
+                conn.executemany(
+                    """
+                    INSERT INTO holding_tag_suppressed (portfolio_id, ticker, tag_key, removed_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(portfolio_id, ticker, tag_key)
+                    DO UPDATE SET removed_at = excluded.removed_at
+                    """,
+                    suppressed,
+                )
+        new_entries = [
+            (portfolio_id, ticker_key, name, key, "manual", now, now)
+            for key, name in desired.items()
+            if key not in existing_keys
+        ]
+        if new_entries:
+            conn.executemany(
+                """
+                INSERT INTO holding_tags (
+                    portfolio_id,
+                    ticker,
+                    tag_name,
+                    tag_key,
+                    source,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                new_entries,
+            )
+        if desired:
+            conn.execute(
+                """
+                DELETE FROM holding_tag_suppressed
+                WHERE portfolio_id = ? AND ticker = ? AND tag_key IN ({})
+                """.format(",".join(["?"] * len(desired))),
+                (portfolio_id, ticker_key, *desired.keys()),
+            )
+    return [desired[key] for key in sorted(desired.keys())]
+
+
+def _ensure_auto_tags(
+    portfolio_id: int,
+    ticker: str,
+    auto_tags: list[str],
+    current_tags: list[str],
+    suppressed: set[str],
+) -> list[str]:
+    if not auto_tags:
+        return sorted(current_tags, key=str.lower)
+    now = datetime.utcnow().isoformat()
+    ticker_key = ticker.strip().upper()
+    tag_map = {_normalize_text(tag): tag for tag in current_tags}
+    to_insert = []
+    for tag in auto_tags:
+        cleaned, tag_key = _normalize_tag_name(tag)
+        if not cleaned or tag_key in tag_map or tag_key in suppressed:
+            continue
+        to_insert.append((portfolio_id, ticker_key, cleaned, tag_key, "auto", now, now))
+        tag_map[tag_key] = cleaned
+    if to_insert:
+        with _db_connection() as conn:
+            conn.executemany(
+                """
+                INSERT INTO holding_tags (
+                    portfolio_id,
+                    ticker,
+                    tag_name,
+                    tag_key,
+                    source,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(portfolio_id, ticker, tag_key)
+                DO NOTHING
+                """,
+                to_insert,
+            )
+        logger.info("Auto-tagged %s with %s", ticker_key, [row[2] for row in to_insert])
+    return [tag_map[key] for key in sorted(tag_map.keys())]
+
+
+def _auto_tags_from_entry(entry: dict) -> list[str]:
+    asset_type = _normalize_text(entry.get("asset_type"))
+    name = _normalize_text(entry.get("name"))
+    ticker = _normalize_text(entry.get("ticker"))
+    ticker_key = str(entry.get("ticker") or "").strip().upper()
+    tags: list[str] = []
+    if ticker_key in KNOWN_ETF_TICKERS:
+        tags.append("ETF")
+    if ticker_key in KNOWN_REIT_TICKERS:
+        tags.append("REITs")
+    if "etf" in asset_type or "etf" in name or ticker.endswith("etf"):
+        tags.append("ETF")
+    if "reit" in asset_type or "reit" in name or "reit" in ticker:
+        tags.append("REITs")
+    return tags
 
 
 def _normalize_categories(categories: list[str] | None) -> list[str]:
@@ -3602,6 +4302,168 @@ def _xtb_sheet_by_name_xls(workbook, name: str):
     return None
 
 
+def _xtb_operation_kind(value: str | None) -> str:
+    text = _normalize_text(value or "")
+    if "stock purchase" in text:
+        return "buy"
+    if "stock sale" in text:
+        return "sell"
+    if "dividend" in text:
+        return "dividend"
+    if "interest" in text:
+        return "interest"
+    if "tax" in text:
+        return "tax"
+    if "fee" in text or "commission" in text:
+        return "fee"
+    return "other"
+
+
+def _parse_operation_date(value: object) -> str | None:
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, str):
+        raw = value.strip()
+        if " " in raw:
+            raw = raw.split(" ")[0]
+        return _parse_date_value(raw)
+    return _parse_date_value(value)
+
+
+def _xtb_cash_operations_from_xls(sheet) -> list[dict]:
+    header_row = None
+    header_map: dict[str, int] = {}
+    max_scan = min(sheet.nrows, 60)
+    for row_idx in range(max_scan):
+        row = sheet.row_values(row_idx)
+        for col_idx, value in enumerate(row):
+            if not isinstance(value, str):
+                continue
+            key = _normalize_text(value)
+            if key in {"type"}:
+                header_map["type"] = col_idx
+                header_row = row_idx
+            if key in {"time", "date"}:
+                header_map["date"] = col_idx
+                header_row = row_idx
+            if key in {"comment", "description"}:
+                header_map["comment"] = col_idx
+                header_row = row_idx
+            if key in {"symbol", "ticker"}:
+                header_map["ticker"] = col_idx
+                header_row = row_idx
+            if key in {"amount"}:
+                header_map["amount"] = col_idx
+                header_row = row_idx
+        if header_row is not None and {"type", "amount"}.issubset(header_map):
+            break
+    if header_row is None or not {"type", "amount"}.issubset(header_map):
+        return []
+    operations: list[dict] = []
+    for row_idx in range(header_row + 1, sheet.nrows):
+        type_value = sheet.cell_value(row_idx, header_map["type"])
+        if type_value is None or str(type_value).strip() == "":
+            continue
+        amount_value = sheet.cell_value(row_idx, header_map["amount"])
+        amount = _parse_number(amount_value)
+        if amount is None:
+            continue
+        date_value = (
+            sheet.cell_value(row_idx, header_map["date"])
+            if "date" in header_map
+            else None
+        )
+        ticker_value = (
+            sheet.cell_value(row_idx, header_map["ticker"])
+            if "ticker" in header_map
+            else None
+        )
+        comment_value = (
+            sheet.cell_value(row_idx, header_map["comment"])
+            if "comment" in header_map
+            else None
+        )
+        operations.append(
+            {
+                "operation_type": str(type_value).strip(),
+                "operation_kind": _xtb_operation_kind(str(type_value)),
+                "trade_date": _parse_operation_date(date_value),
+                "ticker": str(ticker_value).strip() if ticker_value else None,
+                "description": str(comment_value).strip() if comment_value else None,
+                "amount": float(amount),
+            }
+        )
+    return operations
+
+
+def _xtb_cash_operations_from_xlsx(sheet) -> list[dict]:
+    header_row = None
+    header_map: dict[str, int] = {}
+    max_scan = min(sheet.max_row or 0, 60)
+    for row in sheet.iter_rows(min_row=1, max_row=max_scan):
+        for cell in row:
+            value = cell.value
+            if not isinstance(value, str):
+                continue
+            key = _normalize_text(value)
+            if key in {"type"}:
+                header_map["type"] = cell.column - 1
+                header_row = cell.row
+            if key in {"time", "date"}:
+                header_map["date"] = cell.column - 1
+                header_row = cell.row
+            if key in {"comment", "description"}:
+                header_map["comment"] = cell.column - 1
+                header_row = cell.row
+            if key in {"symbol", "ticker"}:
+                header_map["ticker"] = cell.column - 1
+                header_row = cell.row
+            if key in {"amount"}:
+                header_map["amount"] = cell.column - 1
+                header_row = cell.row
+        if header_row is not None and {"type", "amount"}.issubset(header_map):
+            break
+    if header_row is None or not {"type", "amount"}.issubset(header_map):
+        return []
+    operations: list[dict] = []
+    for row in sheet.iter_rows(min_row=header_row + 1, max_row=sheet.max_row):
+        type_cell = row[header_map["type"]] if len(row) > header_map["type"] else None
+        if not type_cell or type_cell.value is None:
+            continue
+        amount_cell = (
+            row[header_map["amount"]] if len(row) > header_map["amount"] else None
+        )
+        amount = _parse_number(amount_cell.value if amount_cell else None)
+        if amount is None:
+            continue
+        date_value = (
+            row[header_map["date"]].value
+            if "date" in header_map and len(row) > header_map["date"]
+            else None
+        )
+        ticker_value = (
+            row[header_map["ticker"]].value
+            if "ticker" in header_map and len(row) > header_map["ticker"]
+            else None
+        )
+        comment_value = (
+            row[header_map["comment"]].value
+            if "comment" in header_map and len(row) > header_map["comment"]
+            else None
+        )
+        operations.append(
+            {
+                "operation_type": str(type_cell.value).strip(),
+                "operation_kind": _xtb_operation_kind(str(type_cell.value)),
+                "trade_date": _parse_operation_date(date_value),
+                "ticker": str(ticker_value).strip() if ticker_value else None,
+                "description": str(comment_value).strip() if comment_value else None,
+                "amount": float(amount),
+            }
+        )
+    return operations
+
+
 def _xtb_positions_from_xls(sheet) -> list[dict]:
     header_row = None
     header_map: dict[str, int] = {}
@@ -3827,6 +4689,7 @@ def _aggregate_xtb_positions(positions: list[dict]) -> list[dict]:
 
 def _parse_xtb_file(file_bytes: bytes, filename: str) -> dict:
     warnings: list[str] = []
+    operations: list[dict] = []
     if filename.lower().endswith(".xls"):
         workbook = xlrd.open_workbook(file_contents=file_bytes)
         cash_sheet = _xtb_sheet_by_name_xls(workbook, "CASH OPERATION HISTORY")
@@ -3852,6 +4715,7 @@ def _parse_xtb_file(file_bytes: bytes, filename: str) -> dict:
                 amount = _parse_number(cash_sheet.cell_value(row_idx, 6))
                 if amount is not None:
                     invested_total += float(amount)
+        operations = _xtb_cash_operations_from_xls(cash_sheet)
         open_sheets = [
             workbook.sheet_by_name(name)
             for name in workbook.sheet_names()
@@ -3895,6 +4759,7 @@ def _parse_xtb_file(file_bytes: bytes, filename: str) -> dict:
                     amount = _parse_number(row[6].value if len(row) > 6 else None)
                     if amount is not None:
                         invested_total += float(amount)
+            operations = _xtb_cash_operations_from_xlsx(cash_sheet)
             open_sheets = [
                 sheet
                 for sheet in workbook.worksheets
@@ -3934,6 +4799,7 @@ def _parse_xtb_file(file_bytes: bytes, filename: str) -> dict:
         "profit_percent": profit_percent,
         "warnings": warnings,
         "positions": positions,
+        "operations": operations,
     }
 
 
@@ -4461,6 +5327,10 @@ def _delete_xtb_import(portfolio_id: int, import_id: int) -> int:
                     (holding_row["id"],),
                 )
                 conn.execute(
+                    "DELETE FROM holdings_operations WHERE import_id = ?",
+                    (holding_row["id"],),
+                )
+                conn.execute(
                     "DELETE FROM holdings_imports WHERE id = ?",
                     (holding_row["id"],),
                 )
@@ -4530,6 +5400,10 @@ def _clear_portfolio_data(portfolio_id: int) -> None:
             (portfolio_id,),
         )
         conn.execute(
+            "DELETE FROM holdings_operations WHERE portfolio_id = ?",
+            (portfolio_id,),
+        )
+        conn.execute(
             "DELETE FROM holdings_imports WHERE portfolio_id = ?",
             (portfolio_id,),
         )
@@ -4555,6 +5429,14 @@ def _clear_portfolio_data(portfolio_id: int) -> None:
 def _delete_portfolio(portfolio_id: int) -> bool:
     _clear_portfolio_data(portfolio_id)
     with _db_connection() as conn:
+        conn.execute(
+            "DELETE FROM holding_tags WHERE portfolio_id = ?",
+            (portfolio_id,),
+        )
+        conn.execute(
+            "DELETE FROM holding_tag_suppressed WHERE portfolio_id = ?",
+            (portfolio_id,),
+        )
         conn.execute(
             "DELETE FROM holdings_metadata WHERE portfolio_id = ?",
             (portfolio_id,),
@@ -4756,6 +5638,94 @@ def _save_holdings_items(import_id: int, items: list[HoldingImportItem]) -> None
             )
 
 
+def _save_holdings_operations(
+    import_id: int,
+    portfolio_id: int,
+    source_file: str,
+    operations: list[HoldingOperationItem],
+    currency: str | None = None,
+) -> None:
+    if not operations:
+        return
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        for op in operations:
+            conn.execute(
+                """
+                INSERT INTO holdings_operations (
+                    import_id,
+                    portfolio_id,
+                    source_file,
+                    operation_type,
+                    operation_kind,
+                    ticker,
+                    description,
+                    amount,
+                    currency,
+                    trade_date,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    import_id,
+                    portfolio_id,
+                    source_file,
+                    op.operation_type,
+                    op.operation_kind,
+                    op.ticker.strip().upper() if op.ticker else None,
+                    op.description,
+                    float(op.amount) if op.amount is not None else None,
+                    op.currency or currency,
+                    op.trade_date,
+                    now,
+                ),
+            )
+
+
+def _list_holdings_operations(portfolio_id: int) -> list[dict]:
+    with _db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id,
+                   source_file,
+                   operation_type,
+                   operation_kind,
+                   ticker,
+                   description,
+                   amount,
+                   currency,
+                   trade_date,
+                   created_at
+            FROM holdings_operations
+            WHERE portfolio_id = ?
+            ORDER BY trade_date DESC, created_at DESC
+            """,
+            (portfolio_id,),
+        ).fetchall()
+    tags_map = _list_holding_tags(portfolio_id)
+    items: list[dict] = []
+    for row in rows:
+        ticker = row["ticker"]
+        tags = tags_map.get(ticker.upper(), []) if ticker else []
+        items.append(
+            {
+                "id": row["id"],
+                "source_file": row["source_file"],
+                "operation_type": row["operation_type"],
+                "operation_kind": row["operation_kind"],
+                "ticker": ticker,
+                "description": row["description"],
+                "amount": float(row["amount"] or 0),
+                "currency": row["currency"],
+                "trade_date": row["trade_date"],
+                "created_at": row["created_at"],
+                "tags": sorted(tags, key=str.lower),
+            }
+        )
+    return items
+
+
 def _save_holding_transaction(portfolio_id: int, payload: HoldingTransactionRequest) -> dict:
     now = datetime.utcnow().isoformat()
     with _db_connection() as conn:
@@ -4877,6 +5847,7 @@ def _upsert_price(ticker: str, price: float, currency: str | None = None) -> Non
 
 
 def _list_holdings_metadata(portfolio_id: int) -> dict[str, dict]:
+    tags_map = _list_holding_tags(portfolio_id)
     with _db_connection() as conn:
         rows = conn.execute(
             """
@@ -4892,6 +5863,7 @@ def _list_holdings_metadata(portfolio_id: int) -> dict[str, dict]:
             "industry": row["industry"],
             "country": row["country"],
             "asset_type": row["asset_type"],
+            "tags": tags_map.get(row["ticker"].upper(), []),
         }
         for row in rows
     }
@@ -5171,6 +6143,10 @@ def _upsert_holdings_metadata(
     industry = _normalize_optional_text(payload.industry)
     country = _normalize_optional_text(payload.country)
     asset_type = _normalize_optional_text(payload.asset_type)
+    tags = payload.tags
+    saved_tags: list[str] | None = None
+    if tags is not None:
+        saved_tags = _set_holding_tags(portfolio_id, ticker, tags)
     with _db_connection() as conn:
         conn.execute(
             """
@@ -5200,6 +6176,7 @@ def _upsert_holdings_metadata(
         "industry": industry,
         "country": country,
         "asset_type": asset_type,
+        "tags": saved_tags,
         "updated_at": now,
     }
 
@@ -5396,12 +6373,26 @@ def _list_holdings_for_portfolio(
                 }
 
     metadata_map = _list_holdings_metadata(portfolio_id)
+    tags_map = _list_holding_tags(portfolio_id)
+    suppressed_map = _list_suppressed_tags(portfolio_id)
     for entry in holdings.values():
-        meta = metadata_map.get(entry["ticker"].upper(), {})
+        ticker_key = entry["ticker"].upper()
+        meta = metadata_map.get(ticker_key, {})
         entry["sector"] = meta.get("sector")
         entry["industry"] = meta.get("industry")
         entry["country"] = meta.get("country")
         entry["asset_type"] = meta.get("asset_type")
+        entry["tags"] = tags_map.get(ticker_key, [])
+        auto_tags = _auto_tags_from_entry(entry)
+        if auto_tags:
+            entry["tags"] = _ensure_auto_tags(
+                portfolio_id,
+                ticker_key,
+                auto_tags,
+                entry["tags"],
+                suppressed_map.get(ticker_key, set()),
+            )
+            tags_map[ticker_key] = entry["tags"]
 
     filtered_entries: list[dict] = []
     for entry in holdings.values():
@@ -5476,6 +6467,7 @@ def _list_holdings_for_portfolio(
             "industry": entry.get("industry"),
             "country": entry.get("country"),
             "asset_type": entry.get("asset_type"),
+            "tags": sorted(entry.get("tags", []), key=str.lower),
             "source": entry.get("source"),
         }
         items.append(item)
@@ -7600,6 +8592,16 @@ def holdings_transactions(
     return {"items": _list_holding_transactions(portfolio_id)}
 
 
+@app.get("/portfolios/{portfolio_id}/holdings/operations")
+def holdings_operations(
+    portfolio_id: int, authorization: str | None = Header(default=None)
+) -> dict:
+    session = _require_session(authorization)
+    if not _get_portfolio(portfolio_id, session["email"]):
+        raise HTTPException(status_code=404, detail="Portfolio not found.")
+    return {"items": _list_holdings_operations(portfolio_id)}
+
+
 @app.post("/portfolios/{portfolio_id}/holdings/transactions")
 def create_holding_transaction(
     portfolio_id: int,
@@ -7639,6 +8641,30 @@ def upsert_holding_metadata(
         raise HTTPException(status_code=400, detail="Ticker is required.")
     item = _upsert_holdings_metadata(portfolio_id, payload)
     return {"status": "saved", "item": item}
+
+
+@app.get("/holdings/tags")
+def list_holding_tags(authorization: str | None = Header(default=None)) -> dict:
+    session = _require_session(authorization)
+    return _list_investment_tags(session["email"])
+
+
+@app.post("/holdings/tags")
+def create_holding_tag(
+    payload: TagRequest, authorization: str | None = Header(default=None)
+) -> dict:
+    session = _require_session(authorization)
+    item = _save_investment_tag(session["email"], payload.name)
+    return {"status": "created", "item": item}
+
+
+@app.delete("/holdings/tags/{tag_name}")
+def delete_holding_tag(
+    tag_name: str, authorization: str | None = Header(default=None)
+) -> dict:
+    session = _require_session(authorization)
+    _delete_investment_tag(session["email"], urllib.parse.unquote(tag_name))
+    return {"status": "deleted"}
 
 
 @app.post("/portfolios/{portfolio_id}/holdings/refresh-prices")
@@ -8160,6 +9186,7 @@ def xtb_preview(
     items: list[dict] = []
     warnings: list[dict] = []
     holdings: list[dict] = []
+    operations: list[dict] = []
     for file in files:
         if not file.filename:
             continue
@@ -8198,9 +9225,28 @@ def xtb_preview(
                 "profit_percent": parsed["profit_percent"],
             }
         )
+        for operation in parsed.get("operations", []):
+            operations.append(
+                {
+                    "source_file": file.filename,
+                    "ticker": operation.get("ticker"),
+                    "operation_type": operation.get("operation_type"),
+                    "operation_kind": operation.get("operation_kind"),
+                    "description": operation.get("description"),
+                    "amount": operation.get("amount"),
+                    "trade_date": operation.get("trade_date"),
+                    "currency": "EUR",
+                }
+            )
     if not items:
         raise HTTPException(status_code=400, detail="Files required.")
-    return {"status": "ok", "items": items, "warnings": warnings, "holdings": holdings}
+    return {
+        "status": "ok",
+        "items": items,
+        "warnings": warnings,
+        "holdings": holdings,
+        "operations": operations,
+    }
 
 
 @app.post("/portfolios/{portfolio_id}/imports/xtb/commit")
@@ -8249,42 +9295,60 @@ def xtb_commit(
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail="File already imported.") from exc
     holdings_payload = payload.holdings or []
-    if holdings_payload:
-        file_category = {item.filename: item.category for item in sanitized_items}
-        file_hash_lookup = {item.filename: item.file_hash for item in sanitized_items}
-        holdings_by_file: dict[str, list[HoldingImportItem]] = {}
-        for holding in holdings_payload:
-            source_file = holding.source_file
-            if not source_file or source_file not in file_hash_lookup:
-                continue
-            category = holding.category or file_category.get(source_file) or "Stocks"
-            holdings_by_file.setdefault(source_file, []).append(
-                HoldingImportItem(
-                    source_file=source_file,
-                    ticker=holding.ticker,
-                    name=holding.name,
-                    shares=holding.shares,
-                    open_price=holding.open_price,
-                    current_price=holding.current_price,
-                    purchase_value=holding.purchase_value,
-                    category=category,
-                )
+    operations_payload = payload.operations or []
+    file_category = {item.filename: item.category for item in sanitized_items}
+    file_hash_lookup = {item.filename: item.file_hash for item in sanitized_items}
+    holdings_by_file: dict[str, list[HoldingImportItem]] = {}
+    for holding in holdings_payload:
+        source_file = holding.source_file
+        if not source_file or source_file not in file_hash_lookup:
+            continue
+        category = holding.category or file_category.get(source_file) or "Stocks"
+        holdings_by_file.setdefault(source_file, []).append(
+            HoldingImportItem(
+                source_file=source_file,
+                ticker=holding.ticker,
+                name=holding.name,
+                shares=holding.shares,
+                open_price=holding.open_price,
+                current_price=holding.current_price,
+                purchase_value=holding.purchase_value,
+                category=category,
             )
-        for source_file, entries in holdings_by_file.items():
-            if not entries:
-                continue
-            snapshot_date = _extract_date_from_filename(source_file)
-            try:
-                holding_import = _save_holdings_import(
-                    portfolio_id,
-                    "XTB",
-                    source_file,
-                    file_hash_lookup[source_file],
-                    snapshot_date,
-                )
-                _save_holdings_items(holding_import["id"], entries)
-            except sqlite3.IntegrityError:
-                continue
+        )
+    operations_by_file: dict[str, list[HoldingOperationItem]] = {}
+    for op in operations_payload:
+        if not op.source_file:
+            continue
+        if op.source_file not in file_hash_lookup:
+            continue
+        operations_by_file.setdefault(op.source_file, []).append(op)
+    for source_file in set(list(holdings_by_file.keys()) + list(operations_by_file.keys())):
+        entries = holdings_by_file.get(source_file, [])
+        ops = operations_by_file.get(source_file, [])
+        if not entries and not ops:
+            continue
+        snapshot_date = _extract_date_from_filename(source_file)
+        try:
+            holding_import = _save_holdings_import(
+                portfolio_id,
+                "XTB",
+                source_file,
+                file_hash_lookup[source_file],
+                snapshot_date,
+            )
+        except sqlite3.IntegrityError:
+            continue
+        if entries:
+            _save_holdings_items(holding_import["id"], entries)
+        if ops:
+            _save_holdings_operations(
+                holding_import["id"],
+                portfolio_id,
+                source_file,
+                ops,
+                currency=portfolio["currency"],
+            )
     return {"status": "imported", "items": len(meta)}
 
 

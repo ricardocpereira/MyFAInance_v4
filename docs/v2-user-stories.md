@@ -563,6 +563,7 @@ Status: Implemented.
 Implementation notes:
 - API endpoints `/goals` (list/create/update/delete).
 - Web + Mobile tabs for goal sheets with add/rename/delete actions.
+- New goals update immediately (optimistic insert + detail fetch after create).
 
 ### US-10.2 Configure goal inputs
 As a user, I want to enter goal inputs (dates, rates, desired monthly income, etc.) so the system can compute projections.
@@ -570,15 +571,16 @@ Acceptance criteria:
 - Inputs stored per goal sheet.
 - Return method can be switched between CAGR and XIRR.
 - Inputs split into two sections:
-- Portfolio FIRE (real contribution history, ECB 10-year inflation).
-- FIRE Simulation Playground (desired monthly amount + custom inflation).
-- Web layout shows Portfolio FIRE and Simulation Playground side-by-side (stacked on mobile), each with Inputs/Results cards and a 4-line projection chart (continued contributions, no-contrib after Coast FIRE, Coast FIRE number, FIRE number). ECB inflation is editable per goal.
+- Portfolio FIRE (real contribution history, ECB 10-year inflation, XIRR/CAGR results).
+- FIRE Simulation Playground (walletburst-style inputs: current age, retirement age, annual spending, current assets, monthly contribution, investment return, inflation, SWR).
+- Portfolio FIRE stays inside the goal screen. Simulation opens via a dedicated "Simulation" button next to Add Goal. Both sections use Inputs/Results cards and a 4-line projection chart (continued contributions, no-contrib after Coast FIRE, Coast FIRE number, FIRE number) with a vertical marker at the Coast FIRE intersection (age/year label). ECB inflation is editable per goal.
 Status: Implemented.
 Implementation notes:
 - API endpoint `/goals/{goal_id}/inputs` stores and validates inputs.
 - Web + Mobile input forms include separate Portfolio vs Simulation blocks.
 - Portfolio inflation uses `ECB_INFLATION_10Y` (env) with fallback to input if missing.
-- Simulation inputs include desired monthly amount (income target) and planned monthly contribution, plus value invested (editable), duration, expected portfolio gains, withdrawal rate, initial investment, return method, and inflation; numeric inputs accept `,` or `.` as decimal separators.
+- Portfolio inputs include desired monthly amount (income target), planned monthly contribution, value invested, duration, expected portfolio gains, withdrawal rate, initial investment, return method, and inflation; numeric inputs accept `,` or `.` as decimal separators.
+- Simulation inputs use inflation-adjusted returns (investment return minus inflation) for calculations and charting.
 
 ### US-10.3 Contributions log
 As a user, I want to record monthly contributions so averages and projections are accurate.
@@ -595,12 +597,45 @@ As a user, I want to see calculated FIRE targets, Coast FIRE timing, and project
 Acceptance criteria:
 - Summary metrics include years elapsed/remaining, invested total, and return rate.
 - FIRE target and Coast/FIRE timing shown with status labels.
-- Projection charts rendered for Portfolio FIRE and Simulation Playground.
+- Projection charts rendered for Portfolio FIRE and Simulation Playground, with Simulation using age on the x-axis.
 Status: Implemented.
 Implementation notes:
 - API computes goal summary and projection series (`_goal_summary`) for portfolio and simulation sections.
 - Web + Mobile render two charts and two metric panels from API.
 - XIRR uses negative contribution flows plus the goal "value invested" as the final cashflow.
+
+## Epic 11 - Investment Tag Management
+
+### US-11.1 Tag selection for holdings
+As an investor, I want to select multiple tags for each holding so I can categorize investments consistently.
+Acceptance criteria:
+- Default tags include ETF, Value Stocks, Dividends, REITs, Emerging Markets, Children Future.
+- Selected tags persist per holding and appear in the holdings list.
+Status: Implemented.
+Implementation notes:
+- New `/holdings/tags` endpoint returns default + custom tags.
+- Tags stored per holding in `holding_tags` and returned in holdings responses.
+- Web + Mobile show tags column/chips and allow selecting tags inside holding details.
+
+### US-11.2 Custom tags
+As an investor, I want to create and remove custom tags unique to my user account.
+Acceptance criteria:
+- Custom tags are unique per user and can be deleted.
+- Default tags cannot be deleted.
+Status: Implemented.
+Implementation notes:
+- Custom tags stored in `investment_tags` (unique by owner + normalized key).
+- DELETE removes custom tag and detaches it from holdings.
+
+### US-11.3 Auto-tag ETF/REIT
+As an investor, I want ETF/REIT tags auto-assigned based on asset metadata.
+Acceptance criteria:
+- Auto tags appear for holdings matching ETF/REIT keywords.
+- Users can remove auto tags and they stay removed.
+Status: Implemented.
+Implementation notes:
+- Auto tags assigned in `_list_holdings_for_portfolio` via `_auto_tags_from_entry`.
+- Suppressed auto tags tracked in `holding_tag_suppressed`.
 
 ## Future sections (WIP)
 - Stocks

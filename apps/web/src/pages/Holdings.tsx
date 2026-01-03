@@ -25,6 +25,7 @@ type HoldingItem = {
   industry?: string | null;
   country?: string | null;
   asset_type?: string | null;
+  tags?: string[];
   portfolio_id?: number;
   portfolio_name?: string;
 };
@@ -36,7 +37,32 @@ type HoldingMetaDraft = {
   industry: string;
   country: string;
   asset_type: string;
+  tags: string[];
 };
+
+type HoldingOperation = {
+  id: number;
+  source_file?: string | null;
+  operation_type: string;
+  operation_kind?: string | null;
+  ticker?: string | null;
+  description?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  trade_date?: string | null;
+  created_at?: string | null;
+  tags?: string[];
+};
+
+type SortKey =
+  | "holding"
+  | "portfolio"
+  | "shares"
+  | "cost_basis"
+  | "current_value"
+  | "profit_value"
+  | "share_percent"
+  | "tags";
 
 type HoldingsProps = {
   t: Translation;
@@ -46,6 +72,37 @@ type HoldingsProps = {
 };
 
 const API_BASE = "http://127.0.0.1:8000";
+const normalizeTicker = (value?: string | null) =>
+  (value || "").trim().toUpperCase();
+const toNumber = (value: unknown) => {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+  const raw = String(value).trim();
+  if (!raw) {
+    return 0;
+  }
+  let text = raw
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, "")
+    .replace(/EUR|USD|GBP/gi, "")
+    .replace(/[€$]/g, "");
+  if (text.includes(",") && text.includes(".")) {
+    if (text.lastIndexOf(",") > text.lastIndexOf(".")) {
+      text = text.replace(/\./g, "").replace(",", ".");
+    } else {
+      text = text.replace(/,/g, "");
+    }
+  } else if (text.includes(",")) {
+    text = text.replace(",", ".");
+  }
+  text = text.replace(/[^0-9.-]/g, "");
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
   const [viewMode, setViewMode] = useState<"overall" | "portfolio">("portfolio");
@@ -55,6 +112,7 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [institutionFilter, setInstitutionFilter] = useState("");
   const [tickerFilter, setTickerFilter] = useState("");
+  const [tableView, setTableView] = useState<"holdings" | "operations">("holdings");
   const [chartGroup, setChartGroup] = useState<
     "ticker" | "sector" | "industry" | "country" | "asset"
   >("ticker");
@@ -65,16 +123,26 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
     "1d" | "1w" | "1m" | "3m" | "6m" | "ytd" | "1y" | "all"
   >("1d");
   const [holdings, setHoldings] = useState<HoldingItem[]>([]);
+  const [operations, setOperations] = useState<HoldingOperation[]>([]);
+  const [operationsLoading, setOperationsLoading] = useState(false);
+  const [operationsError, setOperationsError] = useState("");
   const [totalValue, setTotalValue] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("current_value");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [refreshing, setRefreshing] = useState(false);
   const [infoOpen, setInfoOpen] = useState<string | null>(null);
   const [metaDraft, setMetaDraft] = useState<HoldingMetaDraft | null>(null);
   const [metaSaving, setMetaSaving] = useState(false);
   const [metaError, setMetaError] = useState("");
   const [metaMessage, setMetaMessage] = useState("");
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [customTags, setCustomTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
+  const [tagError, setTagError] = useState("");
+  const [tagMessage, setTagMessage] = useState("");
 
   const [txTicker, setTxTicker] = useState("");
   const [txCompany, setTxCompany] = useState("");
@@ -154,12 +222,81 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
     return Array.from(set);
   }, [holdings]);
 
-  const sortedHoldings = useMemo(
-    () =>
-      [...holdings].sort(
-        (a, b) => Number(b.current_value || 0) - Number(a.current_value || 0)
-      ),
-    [holdings]
+  const sortedHoldings = useMemo(() => {
+    const items = [...holdings];
+    const getSortValue = (item: HoldingItem) => {
+      switch (sortKey) {
+        case "holding":
+          return (item.ticker || "").toLowerCase();
+        case "portfolio":
+          return (item.portfolio_name || "").toLowerCase();
+        case "shares":
+          return toNumber(item.shares);
+        case "cost_basis":
+          return toNumber(item.cost_basis);
+        case "current_value":
+          return toNumber(item.current_value);
+        case "profit_value":
+          return toNumber(item.profit_value);
+        case "share_percent":
+          return toNumber(item.share_percent);
+        case "tags":
+          return (item.tags || []).join(", ").toLowerCase();
+        default:
+          return 0;
+      }
+    };
+    items.sort((a, b) => {
+      const av = getSortValue(a);
+      const bv = getSortValue(b);
+      let comparison = 0;
+      if (typeof av === "string" || typeof bv === "string") {
+        comparison = String(av).localeCompare(String(bv), undefined, {
+          numeric: true,
+          sensitivity: "base"
+        });
+      } else {
+        comparison = Number(av) - Number(bv);
+      }
+      if (comparison === 0) {
+        comparison = normalizeTicker(a.ticker).localeCompare(
+          normalizeTicker(b.ticker),
+          undefined,
+          { numeric: true, sensitivity: "base" }
+        );
+      }
+      return sortDir === "asc" ? comparison : -comparison;
+    });
+    return items;
+  }, [holdings, sortKey, sortDir]);
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+      return;
+    }
+    setSortKey(key);
+    setSortDir("asc");
+  };
+
+  const renderSortLabel = (key: SortKey, label: string) => (
+    <span
+      className="sort-cell"
+      role="button"
+      tabIndex={0}
+      onClick={() => handleSort(key)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          handleSort(key);
+        }
+      }}
+    >
+      <span>{label}</span>
+      {sortKey === key ? (
+        <span className="sort-arrow">{sortDir === "asc" ? "^" : "v"}</span>
+      ) : null}
+    </span>
   );
 
   const filteredHoldings = useMemo(() => {
@@ -310,7 +447,18 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
       if (!response.ok) {
         throw new Error(data?.detail || t.holdings.loadError);
       }
-      setHoldings(data.items || []);
+      setHoldings((current) => {
+        const tagMap = new Map(
+          current.map((item) => [normalizeTicker(item.ticker), item.tags || []])
+        );
+        return (data.items || []).map((item: HoldingItem) => {
+          if (item.tags && item.tags.length) {
+            return item;
+          }
+          const fallback = tagMap.get(normalizeTicker(item.ticker));
+          return fallback && fallback.length ? { ...item, tags: fallback } : item;
+        });
+      });
       setTotalValue(Number(data.total_value) || 0);
     } catch (err) {
       setError(t.holdings.loadError);
@@ -319,16 +467,90 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
     }
   };
 
+  const loadTags = async () => {
+    if (!token) {
+      return;
+    }
+    setTagError("");
+    try {
+      const response = await fetch(`${API_BASE}/holdings/tags`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.detail || "Failed");
+      }
+      const items = (data.items || []) as string[];
+      const custom = (data.custom || []) as string[];
+      setAvailableTags(items);
+      setCustomTags(custom);
+    } catch (err) {
+      setTagError(t.holdings.tags.loadError);
+    }
+  };
+
+  const loadOperations = async () => {
+    if (!token) {
+      return;
+    }
+    if (!activePortfolio) {
+      setOperations([]);
+      return;
+    }
+    setOperationsLoading(true);
+    setOperationsError("");
+    try {
+      const response = await fetch(
+        `${API_BASE}/portfolios/${activePortfolio.id}/holdings/operations`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.detail || t.holdings.operations.loadError);
+      }
+      setOperations(data.items || []);
+    } catch (err) {
+      setOperationsError(t.holdings.operations.loadError);
+    } finally {
+      setOperationsLoading(false);
+    }
+  };
+
   const openMetaEditor = (item: HoldingItem) => {
     setMetaError("");
     setMetaMessage("");
+    setTagError("");
+    setTagMessage("");
     setMetaDraft({
       ticker: item.ticker,
       portfolio_id: item.portfolio_id ?? activePortfolio?.id ?? null,
       sector: item.sector || "",
       industry: item.industry || "",
       country: item.country || "",
-      asset_type: item.asset_type || getAssetType(item.category)
+      asset_type: item.asset_type || getAssetType(item.category),
+      tags: item.tags ? [...item.tags] : []
+    });
+  };
+
+  const openMetaEditorForTicker = (ticker: string, tags: string[] = []) => {
+    const normalized = normalizeTicker(ticker);
+    const match = holdings.find(
+      (item) => normalizeTicker(item.ticker) === normalized
+    );
+    setMetaError("");
+    setMetaMessage("");
+    setTagError("");
+    setTagMessage("");
+    setMetaDraft({
+      ticker: normalized || ticker,
+      portfolio_id: activePortfolio?.id ?? null,
+      sector: match?.sector || "",
+      industry: match?.industry || "",
+      country: match?.country || "",
+      asset_type: match?.asset_type || getAssetType(match?.category),
+      tags: match?.tags ? [...match.tags] : [...tags]
     });
   };
 
@@ -338,6 +560,100 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
 
   const updateMetaDraft = (field: keyof HoldingMetaDraft, value: string) => {
     setMetaDraft((current) => (current ? { ...current, [field]: value } : current));
+  };
+
+  const toggleMetaTag = (tag: string) => {
+    setMetaDraft((current) => {
+      if (!current) {
+        return current;
+      }
+      const normalized = current.tags || [];
+      const exists = normalized.some((entry) => entry === tag);
+      const nextTags = exists
+        ? normalized.filter((entry) => entry !== tag)
+        : [...normalized, tag];
+      return { ...current, tags: nextTags };
+    });
+  };
+
+  const handleAddTag = async () => {
+    if (!tagInput.trim()) {
+      setTagError(t.holdings.tags.required);
+      return;
+    }
+    setTagError("");
+    setTagMessage("");
+    try {
+      const response = await fetch(`${API_BASE}/holdings/tags`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ name: tagInput.trim() })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.detail || "Failed");
+      }
+      setTagInput("");
+      setTagMessage(t.holdings.tags.created);
+      await loadTags();
+      setMetaDraft((current) => {
+        if (!current) {
+          return current;
+        }
+        if (current.tags.includes(data?.name || "")) {
+          return current;
+        }
+        const next = data?.name ? [...current.tags, data.name] : current.tags;
+        return { ...current, tags: next };
+      });
+    } catch (err) {
+      setTagError(t.holdings.tags.saveError);
+    }
+  };
+
+  const handleDeleteTag = async (tag: string) => {
+    setTagError("");
+    setTagMessage("");
+    try {
+      const response = await fetch(
+        `${API_BASE}/holdings/tags/${encodeURIComponent(tag)}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.detail || "Failed");
+      }
+      await loadTags();
+      setTagMessage(t.holdings.tags.deleted);
+      setMetaDraft((current) => {
+        if (!current) {
+          return current;
+        }
+        return { ...current, tags: current.tags.filter((entry) => entry !== tag) };
+      });
+      setHoldings((current) =>
+        current.map((item) =>
+          item.tags && item.tags.includes(tag)
+            ? { ...item, tags: item.tags.filter((entry) => entry !== tag) }
+            : item
+        )
+      );
+      setOperations((current) =>
+        current.map((item) =>
+          item.tags && item.tags.includes(tag)
+            ? { ...item, tags: item.tags.filter((entry) => entry !== tag) }
+            : item
+        )
+      );
+    } catch (err) {
+      setTagError(t.holdings.tags.deleteError);
+    }
   };
 
   const handleMetaSave = async () => {
@@ -366,7 +682,8 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
             sector: metaDraft.sector,
             industry: metaDraft.industry,
             country: metaDraft.country,
-            asset_type: metaDraft.asset_type
+            asset_type: metaDraft.asset_type,
+            tags: metaDraft.tags
           })
         }
       );
@@ -374,9 +691,37 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
       if (!response.ok) {
         throw new Error(data?.detail || t.holdings.meta.saveError);
       }
+      const savedTags = Array.isArray(data?.item?.tags)
+        ? (data.item.tags as string[])
+        : metaDraft.tags;
+      const targetTicker = normalizeTicker(metaDraft.ticker);
+      setHoldings((current) =>
+        current.map((item) =>
+          normalizeTicker(item.ticker) === targetTicker
+            ? {
+                ...item,
+                sector: metaDraft.sector,
+                industry: metaDraft.industry,
+                country: metaDraft.country,
+                asset_type: metaDraft.asset_type,
+                tags: savedTags
+              }
+            : item
+        )
+      );
+      setOperations((current) =>
+        current.map((item) =>
+          normalizeTicker(item.ticker) === targetTicker
+            ? { ...item, tags: savedTags }
+            : item
+        )
+      );
       setMetaMessage(t.holdings.meta.saveSuccess);
       closeMetaEditor();
       loadHoldings();
+      if (tableView === "operations") {
+        loadOperations();
+      }
     } catch (err) {
       setMetaError(t.holdings.meta.saveError);
     } finally {
@@ -393,6 +738,20 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
     categoryFilter,
     institutionFilter
   ]);
+
+  useEffect(() => {
+    if (viewMode === "overall" && tableView === "operations") {
+      setTableView("holdings");
+      return;
+    }
+    if (tableView === "operations") {
+      loadOperations();
+    }
+  }, [token, activePortfolio?.id, tableView, viewMode]);
+
+  useEffect(() => {
+    loadTags();
+  }, [token]);
 
   const handleRefreshPrices = async () => {
     if (!token) {
@@ -742,107 +1101,200 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
       </section>
 
       <section className="holdings-table-wrap">
-        {loading ? <div className="loading-banner">{t.portfolio.loading}</div> : null}
-        {!loading && filteredHoldings.length === 0 ? (
-          <p className="chart-sub">{t.holdings.empty}</p>
-        ) : null}
-        {filteredHoldings.length ? (
-          <div className={`table holdings-table${showPortfolioColumn ? " overall" : ""}`}>
+        <div className="holdings-table-header">
+          <h3>{t.holdings.tableTitle}</h3>
+          <div className="holdings-chip-row">
+            <button
+              type="button"
+              className={`holdings-chip${tableView === "holdings" ? " active" : ""}`}
+              onClick={() => setTableView("holdings")}
+            >
+              {t.holdings.tableViews.holdings}
+            </button>
+            <button
+              type="button"
+              className={`holdings-chip${tableView === "operations" ? " active" : ""}`}
+              onClick={() => setTableView("operations")}
+              disabled={viewMode === "overall"}
+            >
+              {t.holdings.tableViews.operations}
+            </button>
+          </div>
+        </div>
+        {tableView === "holdings" ? (
+          <>
+            {loading ? <div className="loading-banner">{t.portfolio.loading}</div> : null}
+            {!loading && filteredHoldings.length === 0 ? (
+              <p className="chart-sub">{t.holdings.empty}</p>
+            ) : null}
+            {filteredHoldings.length ? (
+              <div
+                className={`table holdings-table${showPortfolioColumn ? " overall" : ""}`}
+              >
+                <div className="row head">
+                  <span>{renderSortLabel("holding", t.holdings.columns.holding)}</span>
+                  {showPortfolioColumn ? (
+                    <span>{renderSortLabel("portfolio", t.holdings.columns.portfolio)}</span>
+                  ) : null}
+                  <span>{renderSortLabel("shares", t.holdings.columns.shares)}</span>
+                  <span className="holding-header">
+                    {renderSortLabel("cost_basis", t.holdings.columns.costBasis)}
+                    <button
+                      type="button"
+                      className="info-btn"
+                      onClick={() =>
+                        setInfoOpen(infoOpen === "costBasis" ? null : "costBasis")
+                      }
+                    >
+                      ?
+                    </button>
+                    {infoOpen === "costBasis" ? (
+                      <div className="holdings-tooltip">{tooltipText.costBasis}</div>
+                    ) : null}
+                  </span>
+                  <span className="holding-header">
+                    {renderSortLabel("current_value", t.holdings.columns.currentValue)}
+                    <button
+                      type="button"
+                      className="info-btn"
+                      onClick={() =>
+                        setInfoOpen(infoOpen === "currentValue" ? null : "currentValue")
+                      }
+                    >
+                      ?
+                    </button>
+                    {infoOpen === "currentValue" ? (
+                      <div className="holdings-tooltip">{tooltipText.currentValue}</div>
+                    ) : null}
+                  </span>
+                  <span className="holding-header">
+                    {renderSortLabel("profit_value", t.holdings.columns.totalProfit)}
+                    <button
+                      type="button"
+                      className="info-btn"
+                      onClick={() =>
+                        setInfoOpen(infoOpen === "totalProfit" ? null : "totalProfit")
+                      }
+                    >
+                      ?
+                    </button>
+                    {infoOpen === "totalProfit" ? (
+                      <div className="holdings-tooltip">{tooltipText.totalProfit}</div>
+                    ) : null}
+                  </span>
+                  <span className="holding-header">
+                    {renderSortLabel("share_percent", t.holdings.columns.share)}
+                    <button
+                      type="button"
+                      className="info-btn"
+                      onClick={() => setInfoOpen(infoOpen === "share" ? null : "share")}
+                    >
+                      ?
+                    </button>
+                    {infoOpen === "share" ? (
+                      <div className="holdings-tooltip">{tooltipText.share}</div>
+                    ) : null}
+                  </span>
+                  <span>{renderSortLabel("tags", t.holdings.columns.tags)}</span>
+                </div>
+                {filteredHoldings.map((item) => (
+                  <div className="row" key={`${item.ticker}-${item.portfolio_id || ""}`}>
+                    <span className="holding-name">
+                      <strong>{item.ticker}</strong>
+                      <small>{item.name || item.institution || "-"}</small>
+                      <button
+                        type="button"
+                        className="holding-meta-btn"
+                        onClick={() => openMetaEditor(item)}
+                      >
+                        {t.holdings.meta.edit}
+                      </button>
+                    </span>
+                    {showPortfolioColumn ? (
+                      <span>{item.portfolio_name || "--"}</span>
+                    ) : null}
+                    <span>{Number(item.shares || 0).toFixed(4)}</span>
+                    <span>{formatCurrency(item.cost_basis || 0)}</span>
+                    <span>{formatCurrency(item.current_value || 0)}</span>
+                    <span className={item.profit_value >= 0 ? "pos" : "neg"}>
+                      {formatSignedCurrency(item.profit_value || 0)}
+                      {item.profit_percent !== null && item.profit_percent !== undefined
+                        ? ` (${formatSignedPercent(item.profit_percent)})`
+                        : ""}
+                    </span>
+                    <span>{Number(item.share_percent || 0).toFixed(2)}%</span>
+                    <span className="holding-tags">
+                      {item.tags && item.tags.length ? (
+                        item.tags.map((tag) => (
+                          <span className="tag-chip" key={`${item.ticker}-${tag}`}>
+                            {tag}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="muted">--</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </>
+        ) : operationsLoading ? (
+          <div className="loading-banner">{t.holdings.operations.loading}</div>
+        ) : operationsError ? (
+          <p className="chart-sub error-text">{operationsError}</p>
+        ) : operations.length === 0 ? (
+          <p className="chart-sub">{t.holdings.operations.empty}</p>
+        ) : (
+          <div className="table holdings-operations-table">
             <div className="row head">
-              <span>{t.holdings.columns.holding}</span>
-              {showPortfolioColumn ? <span>{t.holdings.columns.portfolio}</span> : null}
-              <span>{t.holdings.columns.shares}</span>
-              <span className="holding-header">
-                {t.holdings.columns.costBasis}
-                <button
-                  type="button"
-                  className="info-btn"
-                  onClick={() =>
-                    setInfoOpen(infoOpen === "costBasis" ? null : "costBasis")
-                  }
-                >
-                  ?
-                </button>
-                {infoOpen === "costBasis" ? (
-                  <div className="holdings-tooltip">{tooltipText.costBasis}</div>
-                ) : null}
-              </span>
-              <span className="holding-header">
-                {t.holdings.columns.currentValue}
-                <button
-                  type="button"
-                  className="info-btn"
-                  onClick={() =>
-                    setInfoOpen(infoOpen === "currentValue" ? null : "currentValue")
-                  }
-                >
-                  ?
-                </button>
-                {infoOpen === "currentValue" ? (
-                  <div className="holdings-tooltip">{tooltipText.currentValue}</div>
-                ) : null}
-              </span>
-              <span className="holding-header">
-                {t.holdings.columns.totalProfit}
-                <button
-                  type="button"
-                  className="info-btn"
-                  onClick={() =>
-                    setInfoOpen(infoOpen === "totalProfit" ? null : "totalProfit")
-                  }
-                >
-                  ?
-                </button>
-                {infoOpen === "totalProfit" ? (
-                  <div className="holdings-tooltip">{tooltipText.totalProfit}</div>
-                ) : null}
-              </span>
-              <span className="holding-header">
-                {t.holdings.columns.share}
-                <button
-                  type="button"
-                  className="info-btn"
-                  onClick={() =>
-                    setInfoOpen(infoOpen === "share" ? null : "share")
-                  }
-                >
-                  ?
-                </button>
-                {infoOpen === "share" ? (
-                  <div className="holdings-tooltip">{tooltipText.share}</div>
-                ) : null}
-              </span>
+              <span>{t.holdings.operations.columns.date}</span>
+              <span>{t.holdings.operations.columns.type}</span>
+              <span>{t.holdings.operations.columns.ticker}</span>
+              <span>{t.holdings.operations.columns.description}</span>
+              <span>{t.holdings.operations.columns.amount}</span>
+              <span>{t.holdings.operations.columns.source}</span>
+              <span>{t.holdings.operations.columns.tags}</span>
+              <span>{t.holdings.operations.columns.actions}</span>
             </div>
-            {filteredHoldings.map((item) => (
-              <div className="row" key={`${item.ticker}-${item.portfolio_id || ""}`}>
-                <span className="holding-name">
-                  <strong>{item.ticker}</strong>
-                  <small>{item.name || item.institution || "-"}</small>
-                  <button
-                    type="button"
-                    className="holding-meta-btn"
-                    onClick={() => openMetaEditor(item)}
-                  >
-                    {t.holdings.meta.edit}
-                  </button>
+            {operations.map((item) => (
+              <div className="row" key={`op-${item.id}`}>
+                <span>{item.trade_date || "--"}</span>
+                <span>{item.operation_kind || item.operation_type}</span>
+                <span>{item.ticker || "--"}</span>
+                <span>{item.description || "--"}</span>
+                <span>{formatSignedCurrency(item.amount || 0)}</span>
+                <span>{item.source_file || "--"}</span>
+                <span className="holding-tags">
+                  {item.tags && item.tags.length ? (
+                    item.tags.map((tag) => (
+                      <span className="tag-chip" key={`${item.id}-${tag}`}>
+                        {tag}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="muted">--</span>
+                  )}
                 </span>
-                {showPortfolioColumn ? (
-                  <span>{item.portfolio_name || "--"}</span>
-                ) : null}
-                <span>{Number(item.shares || 0).toFixed(4)}</span>
-                <span>{formatCurrency(item.cost_basis || 0)}</span>
-                <span>{formatCurrency(item.current_value || 0)}</span>
-                <span className={item.profit_value >= 0 ? "pos" : "neg"}>
-                  {formatSignedCurrency(item.profit_value || 0)}
-                  {item.profit_percent !== null && item.profit_percent !== undefined
-                    ? ` (${formatSignedPercent(item.profit_percent)})`
-                    : ""}
+                <span>
+                  {item.ticker ? (
+                    <button
+                      type="button"
+                      className="holding-meta-btn"
+                      onClick={() =>
+                        openMetaEditorForTicker(item.ticker || "", item.tags || [])
+                      }
+                    >
+                      {t.holdings.meta.edit}
+                    </button>
+                  ) : (
+                    <span className="muted">--</span>
+                  )}
                 </span>
-                <span>{Number(item.share_percent || 0).toFixed(2)}%</span>
               </div>
             ))}
           </div>
-        ) : null}
+        )}
       </section>
 
       {metaDraft ? (
@@ -901,6 +1353,52 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
                   ))}
                 </select>
               </label>
+            </div>
+            <div className="holding-tag-panel">
+              <div className="tag-panel-header">
+                <span>{t.holdings.tags.label}</span>
+                {tagMessage ? <span className="tag-message">{tagMessage}</span> : null}
+              </div>
+              <div className="tag-chip-row">
+                {availableTags.map((tag) => {
+                  const active = metaDraft.tags.includes(tag);
+                  const isCustom = customTags.some(
+                    (item) => item.toLowerCase() === tag.toLowerCase()
+                  );
+                  return (
+                    <div className={`tag-chip${active ? " active" : ""}`} key={tag}>
+                      <button
+                        type="button"
+                        className="tag-chip-btn"
+                        onClick={() => toggleMetaTag(tag)}
+                      >
+                        {tag}
+                      </button>
+                      {isCustom ? (
+                        <button
+                          type="button"
+                          className="tag-remove-btn"
+                          onClick={() => handleDeleteTag(tag)}
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="tag-input-row">
+                <input
+                  type="text"
+                  placeholder={t.holdings.tags.placeholder}
+                  value={tagInput}
+                  onChange={(event) => setTagInput(event.target.value)}
+                />
+                <button type="button" className="ghost-btn" onClick={handleAddTag}>
+                  {t.holdings.tags.add}
+                </button>
+              </div>
+              {tagError ? <p className="login-error">{tagError}</p> : null}
             </div>
             <div className="holding-meta-actions">
               <button
