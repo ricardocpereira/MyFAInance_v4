@@ -9061,7 +9061,10 @@ def aggregated_portfolio_summary(authorization: str | None = Header(default=None
 
 
 @app.post("/portfolios/aggregated/snapshot")
-def create_aggregated_snapshot(authorization: str | None = Header(default=None)) -> dict:
+def create_aggregated_snapshot(
+    payload: dict,
+    authorization: str | None = Header(default=None)
+) -> dict:
     """Cria um snapshot do portfolio agregado para tracking de evolução."""
     session = _require_session(authorization)
     portfolios = _list_portfolios(session["email"])
@@ -9073,7 +9076,17 @@ def create_aggregated_snapshot(authorization: str | None = Header(default=None))
     summary = aggregated_portfolio_summary(authorization)
     
     now = datetime.utcnow().isoformat()
-    snapshot_date = datetime.utcnow().date().isoformat()
+    
+    # Use provided date or default to today
+    snapshot_date = payload.get("snapshot_date") if payload else None
+    if snapshot_date:
+        # Validate date format
+        try:
+            datetime.fromisoformat(snapshot_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+    else:
+        snapshot_date = datetime.utcnow().date().isoformat()
     
     with _db_connection() as conn:
         cursor = conn.execute(

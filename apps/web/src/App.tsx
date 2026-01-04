@@ -255,12 +255,29 @@ function App() {
   const handleCreateSnapshot = async () => {
     if (!authToken) return;
     
+    // Prompt for date with today as default
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const dateInput = prompt(`Enter snapshot date (YYYY-MM-DD):`, today);
+    
+    if (!dateInput) {
+      return; // User cancelled
+    }
+    
+    // Validate date format
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(dateInput)) {
+      alert("Invalid date format. Please use YYYY-MM-DD format.");
+      return;
+    }
+    
     try {
       const response = await fetch(`${API_BASE}/portfolios/aggregated/snapshot`, {
         method: "POST",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${authToken}`
-        }
+        },
+        body: JSON.stringify({ snapshot_date: dateInput })
       });
       const data = await response.json();
       if (!response.ok) {
