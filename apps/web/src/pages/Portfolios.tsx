@@ -191,6 +191,12 @@ function Portfolios({
     if (!value) {
       return "";
     }
+    // For aggregated portfolio snapshots, show full date (YYYY-MM-DD)
+    if (portfolio?.id === -1 && value.includes('-') && value.split('-').length === 3) {
+      const [year, month, day] = value.split("-");
+      return `${day}/${month}/${year.slice(-2)}`;
+    }
+    // For regular portfolios, show month/year (YYYY-MM format)
     if (value.includes("-")) {
       const [year, month] = value.split("-");
       if (month && year) {
@@ -200,8 +206,15 @@ function Portfolios({
     return value;
   };
   const historySeries = useMemo(() => {
+    // For aggregated portfolio, use snapshots data instead of monthly history
+    if (portfolio?.id === -1 && snapshots.length > 0) {
+      return snapshots.map(snapshot => ({
+        month: snapshot.snapshot_date, // Use full date for snapshots
+        total: snapshot.total_value
+      })).sort((a, b) => a.month.localeCompare(b.month));
+    }
     return [...historyMonthly].sort((a, b) => a.month.localeCompare(b.month));
-  }, [historyMonthly]);
+  }, [historyMonthly, portfolio, snapshots]);
   const historyRange = useMemo(() => {
     if (!historySeries.length) {
       return { min: 0, max: 0 };
