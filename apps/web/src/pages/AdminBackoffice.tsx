@@ -617,7 +617,7 @@ function AdminBackoffice({ token }: AdminBackofficeProps) {
             <h3>Update Ticker Data from Enriched Excel</h3>
             <p className="chart-sub">
               Upload an enriched Excel file with complete ticker information. 
-              Template: <code>backoffice_files/Tickers_Enriched_Template.xlsx</code>
+              Template: <code>backoffice_files/Tickers_Enriched_Final.xlsx</code>
             </p>
             <form className="admin-form">
               <div className="admin-form-row">
