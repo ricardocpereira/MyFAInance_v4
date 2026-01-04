@@ -752,10 +752,11 @@ function CockpitOverview({ t, token, portfolio, portfolios }: CockpitProps) {
           <span className="chart-sub">{t.cockpit.performanceTrend}</span>
         </article>
 
-        <article className="cockpit-card cockpit-subportfolios">
-          <header>
-            <h3>{t.cockpit.subPortfoliosTitle}</h3>
-          </header>
+        {portfolio?.id !== -1 && (
+          <article className="cockpit-card cockpit-subportfolios">
+            <header>
+              <h3>{t.cockpit.subPortfoliosTitle}</h3>
+            </header>
           {institutionsError ? <p className="chart-sub">{institutionsError}</p> : null}
           {topInstitutions.length ? (
             <div className="cockpit-list">
@@ -783,7 +784,8 @@ function CockpitOverview({ t, token, portfolio, portfolios }: CockpitProps) {
           ) : (
             <p className="chart-sub">{t.cockpit.subPortfoliosEmpty}</p>
           )}
-        </article>
+          </article>
+        )}
 
         <article className="cockpit-card cockpit-summary">
           <header>
@@ -848,8 +850,8 @@ function CockpitOverview({ t, token, portfolio, portfolios }: CockpitProps) {
         {portfolio?.id === -1 && (
           <article className="cockpit-card cockpit-subportfolios-summary">
             <header>
-              <h3>Sub-portfolios</h3>
-              <span className="chart-sub">Individual portfolio breakdown</span>
+              <h3>Portfolios Breakdown</h3>
+              <span className="chart-sub">Individual portfolio values</span>
             </header>
             {subPortfolios.length > 0 ? (
               <div className="cockpit-list">
