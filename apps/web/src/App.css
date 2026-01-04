@@ -3099,8 +3099,7 @@
 }
 
 .cockpit-chart .chart-line-path {
-  stroke: #2ad68d;
-  filter: drop-shadow(0 0 8px rgba(42, 214, 141, 0.45));
+  filter: drop-shadow(0 0 8px rgba(42, 214, 141, 0.3));
 }
 
 .cockpit-list {

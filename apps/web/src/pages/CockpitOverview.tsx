@@ -567,11 +567,12 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
           {summaryError ? <p className="login-error">{summaryError}</p> : null}
           {historyError ? <p className="login-error">{historyError}</p> : null}
           {historyPath ? (
-            <div style={{ position: "relative" }}>
+            <div style={{ position: "relative", height: "200px" }}>
               <svg 
                 className="cockpit-chart" 
                 viewBox="0 0 360 170" 
-                preserveAspectRatio="none"
+                preserveAspectRatio="xMidYMid meet"
+                style={{ width: "100%", height: "100%" }}
                 onMouseMove={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   const x = ((e.clientX - rect.left) / rect.width) * 360;
