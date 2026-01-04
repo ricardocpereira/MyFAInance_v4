@@ -1040,6 +1040,13 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
             >
               {t.holdings.dashboard.tabs.growth}
             </button>
+            <button
+              type="button"
+              className={dashboardView === "realestate" ? "active" : ""}
+              onClick={() => window.location.href = "/real-estate"}
+            >
+              🏘️ Real Estate
+            </button>
           </div>
         </div>
         <div className="holdings-meta">
