@@ -570,7 +570,7 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
             <div style={{ position: "relative" }}>
               <svg 
                 className="cockpit-chart" 
-                viewBox="0 0 360 150" 
+                viewBox="0 0 360 170" 
                 preserveAspectRatio="none"
                 onMouseMove={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -618,6 +618,37 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
                     strokeDasharray="3,3"
                   />
                 )}
+                
+                {/* Eixo Y - valores */}
+                {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+                  const value = historyRange.min + (historyRange.max - historyRange.min) * ratio;
+                  const y = 132 - ratio * 120;
+                  return (
+                    <g key={ratio}>
+                      <line x1="8" y1={y} x2="12" y2={y} stroke="#666" strokeWidth="1" />
+                      <text x="6" y={y + 3} fontSize="8" fill="#999" textAnchor="end">
+                        {Math.round(value / 1000)}k€
+                      </text>
+                    </g>
+                  );
+                })}
+                
+                {/* Eixo X - datas */}
+                {chartSeries.map((item, index) => {
+                  if (chartSeries.length > 12 && index % 3 !== 0) return null;
+                  const x = 12 + index * (340 / (chartSeries.length - 1));
+                  const label = item.month.includes('-') 
+                    ? item.month.split('-').slice(1).reverse().join('/') 
+                    : item.month.substring(5).replace('-', '/');
+                  return (
+                    <g key={index}>
+                      <line x1={x} y1="132" x2={x} y2="136" stroke="#666" strokeWidth="1" />
+                      <text x={x} y="145" fontSize="8" fill="#999" textAnchor="middle">
+                        {label}
+                      </text>
+                    </g>
+                  );
+                })}
               </svg>
               {tooltipData && (
                 <div
