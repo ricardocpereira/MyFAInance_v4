@@ -157,6 +157,28 @@ export const translations = {
           pricePercent: "Price (%)"
         }
       },
+      dashboard: {
+        title: "Investment Dashboard",
+        tabs: {
+          holdings: "Holdings & operations",
+          diversification: "Diversification",
+          dividends: "Dividends",
+          growth: "Growth"
+        },
+        diversification: {
+          title: "Portfolio Diversification",
+          subtitle: "Asset allocation and sector distribution analysis",
+          assetAllocation: {
+            title: "Asset Allocation",
+            subtitle: "Distribution by asset type"
+          },
+          sectorAllocation: {
+            title: "Sector Allocation",
+            subtitle: "Distribution by sector"
+          },
+          empty: "No diversification data available."
+        }
+      },
       transaction: {
         title: "Add transaction",
         subtitle: "Log manual buy/sell operations for your holdings.",
@@ -984,6 +1006,28 @@ export const translations = {
           pricePercent: "Preco (%)"
         }
       },
+      dashboard: {
+        title: "Dashboard de Investimentos",
+        tabs: {
+          holdings: "Holdings e operacoes",
+          diversification: "Diversificacao",
+          dividends: "Dividendos",
+          growth: "Crescimento"
+        },
+        diversification: {
+          title: "Diversificacao do Portfolio",
+          subtitle: "Analise de alocacao de ativos e distribuicao por setor",
+          assetAllocation: {
+            title: "Alocacao de Ativos",
+            subtitle: "Distribuicao por tipo de ativo"
+          },
+          sectorAllocation: {
+            title: "Alocacao por Setor",
+            subtitle: "Distribuicao por setor"
+          },
+          empty: "Sem dados de diversificacao disponiveis."
+        }
+      },
       transaction: {
         title: "Adicionar transacao",
         subtitle: "Registe compras/vendas manuais para holdings.",
@@ -1809,6 +1853,28 @@ export const translations = {
           gainValue: "Ganancia (Valor)",
           gainPercent: "Ganancia (%)",
           pricePercent: "Precio (%)"
+        }
+      },
+      dashboard: {
+        title: "Panel de Inversiones",
+        tabs: {
+          holdings: "Holdings y operaciones",
+          diversification: "Diversificacion",
+          dividends: "Dividendos",
+          growth: "Crecimiento"
+        },
+        diversification: {
+          title: "Diversificacion del Portfolio",
+          subtitle: "Analisis de asignacion de activos y distribucion por sector",
+          assetAllocation: {
+            title: "Asignacion de Activos",
+            subtitle: "Distribucion por tipo de activo"
+          },
+          sectorAllocation: {
+            title: "Asignacion por Sector",
+            subtitle: "Distribucion por sector"
+          },
+          empty: "Sin datos de diversificacion disponibles."
         }
       },
       transaction: {

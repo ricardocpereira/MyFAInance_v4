@@ -448,10 +448,6 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
           <h2>{t.cockpit.title}</h2>
           <p>{t.cockpit.subtitle}</p>
         </div>
-        <div className="cockpit-header-meta">
-          <span className="tag">{portfolio.name}</span>
-          <span className="tag">{portfolio.currency}</span>
-        </div>
       </header>
 
       <section className="cockpit-grid">

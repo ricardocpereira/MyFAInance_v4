@@ -94,9 +94,15 @@ ALLOWED_CURRENCIES = {"EUR", "USD", "GBP"}
 PRICE_API_PROVIDER = os.getenv("PRICE_API_PROVIDER", "twelvedata").lower()
 PRICE_API_KEY = os.getenv("PRICE_API_KEY", "")
 PRICE_CACHE_TTL_MINUTES = int(os.getenv("PRICE_CACHE_TTL_MINUTES", "60"))
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 DB_PATH = os.getenv(
     "DB_PATH", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "app.db"))
 )
+# Ensure DB_PATH is absolute
+if not os.path.isabs(DB_PATH):
+    # If relative, make it relative to the app directory
+    DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", DB_PATH))
 
 BANKING_CATEGORY_TREE = {
     "Sem categoria": ["Sem subcategoria"],
@@ -374,6 +380,32 @@ class TagRequest(BaseModel):
 class PriceRefreshRequest(BaseModel):
     tickers: list[str] | None = None
     force: bool = False
+
+
+class TickerPriceUpload(BaseModel):
+    ticker: str
+    price: float
+    currency: str = "USD"
+
+
+class BulkTickerPriceUpload(BaseModel):
+    prices: list[TickerPriceUpload]
+
+
+class TickerMetadata(BaseModel):
+    ticker: str
+    name: str | None = None
+    asset_class: str | None = None
+    sector: str | None = None
+    industry: str | None = None
+    country: str | None = None
+    region: str | None = None
+    currency: str | None = None
+    exchange: str | None = None
+    dividend_yield: float | None = None
+    dividend_frequency: str | None = None
+    next_dividend_date: str | None = None
+    next_dividend_amount: float | None = None
 
 
 class BankingPreviewRow(BaseModel):
@@ -713,6 +745,22 @@ def _init_db() -> None:
                 currency TEXT,
                 updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS ticker_metadata (
+                ticker TEXT PRIMARY KEY,
+                name TEXT,
+                asset_class TEXT,
+                sector TEXT,
+                industry TEXT,
+                country TEXT,
+                region TEXT,
+                currency TEXT,
+                exchange TEXT,
+                dividend_yield REAL,
+                dividend_frequency TEXT,
+                next_dividend_date TEXT,
+                next_dividend_amount REAL,
+                last_updated TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS holdings_imports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 portfolio_id INTEGER NOT NULL,
@@ -915,6 +963,15 @@ def _init_db() -> None:
             conn.execute("ALTER TABLE trade_republic_entries ADD COLUMN file_hash TEXT")
         if "snapshot_date" not in trade_columns:
             conn.execute("ALTER TABLE trade_republic_entries ADD COLUMN snapshot_date TEXT")
+        
+        # Migration for ticker_metadata: add next_dividend_amount if not exists
+        ticker_metadata_columns = [
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(ticker_metadata)").fetchall()
+        ]
+        if ticker_metadata_columns and "next_dividend_amount" not in ticker_metadata_columns:
+            conn.execute("ALTER TABLE ticker_metadata ADD COLUMN next_dividend_amount REAL")
+        
         settings_columns = [
             row["name"]
             for row in conn.execute(
@@ -2501,6 +2558,232 @@ def _require_session(authorization: str | None) -> sqlite3.Row:
     return session
 
 
+def _require_admin(authorization: str | None) -> sqlite3.Row:
+    """Verifica se o usuário é administrador."""
+    session = _require_session(authorization)
+    if session["email"] != ADMIN_USERNAME:
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return session
+
+
+def _fetch_ticker_metadata_yfinance(ticker: str) -> dict | None:
+    """Busca metadados de um ticker usando yfinance (Yahoo Finance).
+    
+    Usa múltiplas estratégias para evitar rate limiting:
+    1. Tenta .info com delays
+    2. Fallback para download() que é menos bloqueado
+    3. Retorna dados básicos se tudo falhar
+    """
+    try:
+        import yfinance as yf
+        import time
+        import random
+        
+        # Add random delay to avoid detection (3-6 seconds)
+        delay = random.uniform(3.0, 6.0)
+        print(f"Waiting {delay:.1f}s before fetching {ticker}...")
+        time.sleep(delay)
+        
+        stock = yf.Ticker(ticker)
+        
+        # Strategy 1: Try .info (often blocked)
+        info = None
+        try:
+            info = stock.info
+            if info and "symbol" in info:
+                print(f"✓ Got full metadata for {ticker} via .info")
+        except Exception as info_error:
+            print(f"⚠️ .info failed for {ticker}: {str(info_error)[:50]}")
+        
+        # Strategy 2: Try download() method (less blocked)
+        if not info:
+            try:
+                print(f"Trying alternate method for {ticker}...")
+                import pandas as pd
+                # Download uses different endpoint, often works when .info fails
+                hist = yf.download(ticker, period="5d", progress=False)
+                if not hist.empty:
+                    # Get basic info from history
+                    latest_price = hist["Close"].iloc[-1]
+                    print(f"✓ Got historical data for {ticker}, creating basic metadata")
+                    return {
+                        "ticker": ticker.upper(),
+                        "name": ticker.upper(),
+                        "asset_class": "Stock",
+                        "sector": None,
+                        "industry": None,
+                        "country": None,
+                        "region": None,
+                        "currency": "USD",
+                        "exchange": None,
+                        "dividend_yield": None,
+                        "dividend_frequency": None,
+                        "next_dividend_date": None
+                    }
+            except Exception as download_error:
+                print(f"⚠️ download() also failed for {ticker}: {str(download_error)[:50]}")
+        
+        # If we got info data, parse it
+        if info and "symbol" in info:
+            # Determinar asset class
+            asset_class = "Stock"
+            quote_type = info.get("quoteType", "").upper()
+            if quote_type == "ETF":
+                asset_class = "ETF"
+            elif "REIT" in info.get("longBusinessSummary", "").upper() or info.get("industry") == "REIT":
+                asset_class = "REIT"
+            
+            # Calcular próxima data de dividendo (se aplicável)
+            next_div_date = None
+            if info.get("exDividendDate"):
+                try:
+                    import datetime as dt
+                    next_div_date = dt.datetime.fromtimestamp(info["exDividendDate"]).strftime("%Y-%m-%d")
+                except:
+                    pass
+            
+            return {
+                "ticker": ticker.upper(),
+                "name": info.get("longName") or info.get("shortName"),
+                "asset_class": asset_class,
+                "sector": info.get("sector"),
+                "industry": info.get("industry"),
+                "country": info.get("country"),
+                "region": info.get("region"),
+                "currency": info.get("currency"),
+                "exchange": info.get("exchange"),
+                "dividend_yield": info.get("dividendYield"),
+                "dividend_frequency": "Quarterly" if info.get("dividendYield") else None,
+                "next_dividend_date": next_div_date
+            }
+        
+        print(f"✗ All methods failed for {ticker}")
+        return None
+        
+    except Exception as e:
+        print(f"✗ Error fetching metadata for {ticker}: {e}")
+        return None
+
+
+def _fetch_ticker_price_yfinance(ticker: str) -> dict | None:
+    """Busca preço atual de um ticker usando yfinance."""
+    try:
+        import yfinance as yf
+        import time
+        import random
+        
+        # Add random delay (2-3 seconds)
+        time.sleep(random.uniform(2.0, 3.0))
+        
+        # Try download() first (less blocked)
+        try:
+            hist = yf.download(ticker, period="1d", progress=False)
+            if not hist.empty:
+                latest_price = hist["Close"].iloc[-1]
+                return {
+                    "ticker": ticker.upper(),
+                    "price": float(latest_price),
+                    "currency": "EUR" if ticker.endswith(".DE") else "USD"
+                }
+        except Exception as e:
+            print(f"yf.download failed for {ticker}: {str(e)[:100]}")
+        
+        # Fallback to stock.history()
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period="1d")
+            
+            if hist.empty:
+                print(f"No history data for {ticker}")
+                return None
+            
+            latest_price = hist["Close"].iloc[-1]
+            
+            # Try to get currency, fallback based on ticker suffix
+            currency = "USD"
+            if ticker.endswith(".DE"):
+                currency = "EUR"
+            elif ticker.endswith(".L"):
+                currency = "GBP"
+            
+            try:
+                info = stock.info
+                if info and "currency" in info:
+                    currency = info.get("currency", currency)
+            except Exception as e:
+                print(f"Could not fetch info for {ticker}, using {currency}: {str(e)[:100]}")
+            
+            return {
+                "ticker": ticker.upper(),
+                "price": float(latest_price),
+                "currency": currency
+            }
+        except Exception as e:
+            print(f"yf.Ticker.history failed for {ticker}: {str(e)[:100]}")
+            return None
+        
+    except Exception as e:
+        print(f"Error fetching price for {ticker}: {e}")
+        return None
+
+
+def _save_ticker_metadata(metadata: dict) -> None:
+    """Salva ou atualiza metadados de um ticker."""
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO ticker_metadata (
+                ticker, name, asset_class, sector, industry, country, region,
+                currency, exchange, dividend_yield, dividend_frequency,
+                next_dividend_date, next_dividend_amount, last_updated
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(ticker) DO UPDATE SET
+                name = excluded.name,
+                asset_class = excluded.asset_class,
+                sector = excluded.sector,
+                industry = excluded.industry,
+                country = excluded.country,
+                region = excluded.region,
+                currency = excluded.currency,
+                exchange = excluded.exchange,
+                dividend_yield = excluded.dividend_yield,
+                dividend_frequency = excluded.dividend_frequency,
+                next_dividend_date = excluded.next_dividend_date,
+                next_dividend_amount = excluded.next_dividend_amount,
+                last_updated = excluded.last_updated
+            """,
+            (
+                metadata.get("ticker"),
+                metadata.get("name"),
+                metadata.get("asset_class"),
+                metadata.get("sector"),
+                metadata.get("industry"),
+                metadata.get("country"),
+                metadata.get("region"),
+                metadata.get("currency"),
+                metadata.get("exchange"),
+                metadata.get("dividend_yield"),
+                metadata.get("dividend_frequency"),
+                metadata.get("next_dividend_date"),
+                metadata.get("next_dividend_amount"),
+                now
+            ),
+        )
+
+
+def _get_ticker_metadata(ticker: str) -> dict | None:
+    """Obtém metadados de um ticker da base de dados."""
+    with _db_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM ticker_metadata WHERE ticker = ?",
+            (ticker.upper(),)
+        ).fetchone()
+        if not row:
+            return None
+        return dict(row)
+
+
 def _list_portfolios(owner_email: str) -> list[dict]:
     with _db_connection() as conn:
         rows = conn.execute(
@@ -2566,6 +2849,7 @@ def _create_portfolio(owner_email: str, name: str, currency: str, categories: li
         )
         portfolio_id = cursor.lastrowid
     _ensure_category_settings(portfolio_id, categories)
+    _ensure_banking_categories(portfolio_id)
     return {
         "id": portfolio_id,
         "name": name,
@@ -5847,9 +6131,12 @@ def _upsert_price(ticker: str, price: float, currency: str | None = None) -> Non
 
 
 def _list_holdings_metadata(portfolio_id: int) -> dict[str, dict]:
+    """Lista metadados dos holdings, priorizando ticker_metadata global sobre holdings_metadata por portfolio."""
     tags_map = _list_holding_tags(portfolio_id)
+    
     with _db_connection() as conn:
-        rows = conn.execute(
+        # Get portfolio-specific metadata
+        portfolio_rows = conn.execute(
             """
             SELECT ticker, sector, industry, country, asset_type
             FROM holdings_metadata
@@ -5857,16 +6144,47 @@ def _list_holdings_metadata(portfolio_id: int) -> dict[str, dict]:
             """,
             (portfolio_id,),
         ).fetchall()
-    return {
+        
+        # Get global ticker metadata with more complete information
+        global_rows = conn.execute(
+            """
+            SELECT ticker, name, sector, industry, country, region, 
+                   currency, exchange, asset_class
+            FROM ticker_metadata
+            """,
+        ).fetchall()
+    
+    # Build portfolio-specific metadata map
+    metadata_map = {
         row["ticker"].upper(): {
             "sector": row["sector"],
             "industry": row["industry"],
             "country": row["country"],
+            "region": None,
+            "currency": None,
+            "exchange": None,
             "asset_type": row["asset_type"],
             "tags": tags_map.get(row["ticker"].upper(), []),
         }
-        for row in rows
+        for row in portfolio_rows
     }
+    
+    # Override with global ticker metadata (priority)
+    for row in global_rows:
+        ticker_key = row["ticker"].upper()
+        existing = metadata_map.get(ticker_key, {})
+        metadata_map[ticker_key] = {
+            "sector": row["sector"] or existing.get("sector"),
+            "industry": row["industry"] or existing.get("industry"),
+            "country": row["country"] or existing.get("country"),
+            "region": row["region"],
+            "currency": row["currency"],
+            "exchange": row["exchange"],
+            "asset_type": row["asset_class"] or existing.get("asset_type"),
+            "tags": existing.get("tags", tags_map.get(ticker_key, [])),
+        }
+    
+    return metadata_map
 
 
 def _save_banking_import(
@@ -6196,36 +6514,264 @@ def _fetch_price_twelvedata(ticker: str) -> float:
         raise HTTPException(status_code=400, detail="Price API not configured.")
     query = urllib.parse.urlencode({"symbol": ticker, "apikey": PRICE_API_KEY})
     url = f"https://api.twelvedata.com/price?{query}"
-    with urllib.request.urlopen(url, timeout=10) as response:
-        data = json.loads(response.read().decode("utf-8"))
-    price_value = data.get("price")
-    if price_value is None:
-        raise HTTPException(status_code=400, detail=f"Price unavailable for {ticker}.")
-    return float(price_value)
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            response_text = response.read().decode("utf-8")
+            if not response_text.strip():
+                print(f"Twelve Data returned empty response for {ticker}")
+                raise HTTPException(status_code=400, detail=f"Empty response from Twelve Data for {ticker}.")
+            data = json.loads(response_text)
+        
+        # Check for error in response
+        if "code" in data or "status" in data:
+            error_msg = data.get("message", "Unknown error")
+            print(f"Twelve Data error for {ticker}: {error_msg}")
+            raise HTTPException(status_code=400, detail=f"Twelve Data error: {error_msg}")
+        
+        price_value = data.get("price")
+        if price_value is None:
+            print(f"Twelve Data returned no price for {ticker}: {data}")
+            raise HTTPException(status_code=400, detail=f"Price unavailable for {ticker}.")
+        return float(price_value)
+    except json.JSONDecodeError as e:
+        print(f"Twelve Data JSON decode error for {ticker}: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid response from Twelve Data for {ticker}.")
+    except urllib.error.HTTPError as e:
+        print(f"Twelve Data HTTP error for {ticker}: {e.code} {e.reason}")
+        raise HTTPException(status_code=400, detail=f"Twelve Data HTTP error for {ticker}.")
 
 
 def _fetch_price_finnhub(ticker: str) -> float:
+    """Busca preço atual usando Finnhub /quote endpoint."""
     if not PRICE_API_KEY:
         raise HTTPException(status_code=400, detail="Price API not configured.")
     query = urllib.parse.urlencode({"symbol": ticker, "token": PRICE_API_KEY})
     url = f"https://finnhub.io/api/v1/quote?{query}"
-    with urllib.request.urlopen(url, timeout=10) as response:
-        data = json.loads(response.read().decode("utf-8"))
-    price_value = data.get("c")
-    if price_value is None:
-        raise HTTPException(status_code=400, detail=f"Price unavailable for {ticker}.")
-    price_value = float(price_value)
-    if price_value <= 0:
-        raise HTTPException(status_code=400, detail=f"Price unavailable for {ticker}.")
-    return price_value
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            response_text = response.read().decode("utf-8")
+            if not response_text.strip():
+                print(f"Finnhub returned empty response for {ticker}")
+                raise HTTPException(status_code=400, detail=f"Empty response from Finnhub for {ticker}.")
+            data = json.loads(response_text)
+        
+        # Check for error in response
+        if "error" in data:
+            error_msg = data.get("error", "Unknown error")
+            print(f"Finnhub error for {ticker}: {error_msg}")
+            raise HTTPException(status_code=400, detail=f"Finnhub error: {error_msg}")
+        
+        # Get current price (c = current price)
+        price_value = data.get("c")
+        if price_value is None or price_value == 0:
+            print(f"Finnhub returned no valid price for {ticker}: {data}")
+            raise HTTPException(status_code=400, detail=f"Price unavailable for {ticker}.")
+        
+        price_value = float(price_value)
+        if price_value <= 0:
+            raise HTTPException(status_code=400, detail=f"Invalid price for {ticker}.")
+        
+        return price_value
+    except json.JSONDecodeError as e:
+        print(f"Finnhub JSON decode error for {ticker}: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid response from Finnhub for {ticker}.")
+    except urllib.error.HTTPError as e:
+        print(f"Finnhub HTTP error for {ticker}: {e.code} {e.reason}")
+        raise HTTPException(status_code=400, detail=f"Finnhub HTTP error for {ticker}.")
+
+
+def _fetch_profile_finnhub(ticker: str) -> dict | None:
+    """Busca perfil da empresa usando Finnhub /stock/profile2 endpoint."""
+    if not PRICE_API_KEY:
+        return None
+    query = urllib.parse.urlencode({"symbol": ticker, "token": PRICE_API_KEY})
+    url = f"https://finnhub.io/api/v1/stock/profile2?{query}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            response_text = response.read().decode("utf-8")
+            if not response_text.strip():
+                return None
+            data = json.loads(response_text)
+        
+        if not data or "error" in data:
+            return None
+        
+        return {
+            "name": data.get("name"),
+            "country": data.get("country"),
+            "currency": data.get("currency"),
+            "exchange": data.get("exchange"),
+            "industry": data.get("finnhubIndustry"),
+            "sector": data.get("finnhubIndustry"),  # Finnhub uses same field
+        }
+    except:
+        return None
+
+
+def _fetch_metrics_finnhub(ticker: str) -> dict | None:
+    """Busca métricas usando Finnhub /stock/metric endpoint."""
+    if not PRICE_API_KEY:
+        return None
+    query = urllib.parse.urlencode({"symbol": ticker, "metric": "all", "token": PRICE_API_KEY})
+    url = f"https://finnhub.io/api/v1/stock/metric?{query}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            response_text = response.read().decode("utf-8")
+            if not response_text.strip():
+                return None
+            data = json.loads(response_text)
+        
+        if not data or "error" in data:
+            return None
+        
+        metrics = data.get("metric", {})
+        return {
+            "dividend_yield": metrics.get("dividendYieldIndicatedAnnual"),
+        }
+    except:
+        return None
+
+
+def _fetch_dividends_finnhub(ticker: str) -> dict | None:
+    """Busca dividendos usando Finnhub /stock/dividend2 endpoint."""
+    if not PRICE_API_KEY:
+        return None
+    
+    # Get dividends for next 12 months
+    from datetime import datetime, timedelta
+    today = datetime.now()
+    to_date = (today + timedelta(days=365)).strftime("%Y-%m-%d")
+    from_date = today.strftime("%Y-%m-%d")
+    
+    query = urllib.parse.urlencode({
+        "symbol": ticker,
+        "from": from_date,
+        "to": to_date,
+        "token": PRICE_API_KEY
+    })
+    url = f"https://finnhub.io/api/v1/stock/dividend?{query}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            response_text = response.read().decode("utf-8")
+            if not response_text.strip():
+                return None
+            data = json.loads(response_text)
+        
+        if not data or "error" in data or not isinstance(data, list):
+            return None
+        
+        # Get next dividend date (first future dividend)
+        future_dividends = [d for d in data if d.get("payDate") and d.get("payDate") >= from_date]
+        if future_dividends:
+            next_div = min(future_dividends, key=lambda x: x.get("payDate", "9999-12-31"))
+            return {
+                "next_dividend_date": next_div.get("payDate"),
+                "next_dividend_amount": next_div.get("amount")
+            }
+        
+        return None
+    except:
+        return None
+
+
+def _fetch_metadata_finnhub(ticker: str) -> dict | None:
+    """Busca metadados completos usando múltiplos endpoints do Finnhub."""
+    if not PRICE_API_KEY:
+        return None
+    
+    import time
+    
+    metadata = {
+        "ticker": ticker.upper(),
+        "name": None,
+        "asset_class": "Stock",
+        "sector": None,
+        "industry": None,
+        "country": None,
+        "region": None,
+        "currency": "USD",
+        "exchange": None,
+        "dividend_yield": None,
+        "dividend_frequency": None,
+        "next_dividend_date": None,
+        "next_dividend_amount": None
+    }
+    
+    try:
+        # 1. Get profile (name, country, exchange, industry)
+        profile = _fetch_profile_finnhub(ticker)
+        if profile:
+            metadata.update({
+                "name": profile.get("name") or ticker,
+                "country": profile.get("country"),
+                "currency": profile.get("currency") or "USD",
+                "exchange": profile.get("exchange"),
+                "industry": profile.get("industry"),
+                "sector": profile.get("sector")
+            })
+        
+        # Small delay between API calls (rate limit: 59/min)
+        time.sleep(1.05)
+        
+        # 2. Get metrics (dividend yield)
+        metrics = _fetch_metrics_finnhub(ticker)
+        if metrics:
+            metadata["dividend_yield"] = metrics.get("dividend_yield")
+        
+        time.sleep(1.05)
+        
+        # 3. Get dividends (next payment date)
+        dividends = _fetch_dividends_finnhub(ticker)
+        if dividends:
+            metadata["next_dividend_date"] = dividends.get("next_dividend_date")
+            metadata["next_dividend_amount"] = dividends.get("next_dividend_amount")
+            if metadata["next_dividend_date"]:
+                metadata["dividend_frequency"] = "Quarterly"  # Assume quarterly if has dividends
+        
+        time.sleep(1.05)
+        
+        # 4. Get current price
+        try:
+            price = _fetch_price_finnhub(ticker)
+            if price:
+                metadata["price"] = price
+        except Exception as price_error:
+            print(f"Could not fetch price for {ticker}: {price_error}")
+            metadata["price"] = None
+        
+        return metadata
+    except Exception as e:
+        print(f"Error fetching Finnhub metadata for {ticker}: {e}")
+        return None
 
 
 def _fetch_latest_price(ticker: str) -> float:
-    if PRICE_API_PROVIDER == "twelvedata":
-        return _fetch_price_twelvedata(ticker)
-    if PRICE_API_PROVIDER == "finnhub":
-        return _fetch_price_finnhub(ticker)
-    raise HTTPException(status_code=400, detail="Unsupported price provider.")
+    """Fetch latest price with fallback to yfinance if configured provider fails."""
+    
+    # Try configured provider first (also check for typo "finhub")
+    if PRICE_API_PROVIDER in ("twelvedata",):
+        try:
+            return _fetch_price_twelvedata(ticker)
+        except Exception as e:
+            print(f"Twelve Data failed for {ticker}, falling back to yfinance: {str(e)[:100]}")
+    
+    if PRICE_API_PROVIDER in ("finnhub", "finhub"):
+        try:
+            return _fetch_price_finnhub(ticker)
+        except Exception as e:
+            print(f"Finnhub failed for {ticker}, falling back to yfinance: {str(e)[:100]}")
+    
+    # Fallback to yfinance (free, works for most tickers including European)
+    print(f"Attempting yfinance for {ticker}...")
+    try:
+        price_data = _fetch_ticker_price_yfinance(ticker)
+        if price_data and price_data.get("price"):
+            print(f"✓ yfinance success for {ticker}: {price_data['price']}")
+            return float(price_data["price"])
+    except Exception as e:
+        print(f"✗ yfinance also failed for {ticker}: {e}")
+    
+    raise HTTPException(status_code=400, detail=f"Price unavailable for {ticker}.")
 
 
 def _aggregate_transactions_by_ticker(
@@ -6264,6 +6810,29 @@ def _aggregate_transactions_by_ticker(
     return aggregated
 
 
+def _convert_currency(amount: float, from_currency: str, to_currency: str) -> float:
+    """Convert currency amount using simple fixed rates.
+    In production, this should use a real exchange rate API."""
+    if not amount or from_currency == to_currency:
+        return amount
+    
+    # Fixed rates (USD as base)
+    rates = {
+        "USD": 1.0,
+        "EUR": 0.92,  # 1 USD = 0.92 EUR
+        "GBP": 0.79,
+        "CHF": 0.85,
+        "JPY": 149.0,
+    }
+    
+    from_rate = rates.get(from_currency, 1.0)
+    to_rate = rates.get(to_currency, 1.0)
+    
+    # Convert to USD first, then to target currency
+    amount_usd = amount / from_rate
+    return amount_usd * to_rate
+
+
 def _list_holdings_for_portfolio(
     portfolio_id: int,
     category_settings: dict[str, bool],
@@ -6271,6 +6840,14 @@ def _list_holdings_for_portfolio(
     institution: str | None = None,
     ticker: str | None = None,
 ) -> dict:
+    # Get portfolio currency for price conversion
+    with _db_connection() as conn:
+        portfolio_row = conn.execute(
+            "SELECT currency FROM portfolios WHERE id = ?",
+            (portfolio_id,),
+        ).fetchone()
+        portfolio_currency = portfolio_row["currency"] if portfolio_row else "USD"
+    
     history_items = _list_portfolio_history(portfolio_id, category_settings)
     if not history_items:
         return {"items": [], "total_value": 0.0}
@@ -6381,6 +6958,9 @@ def _list_holdings_for_portfolio(
         entry["sector"] = meta.get("sector")
         entry["industry"] = meta.get("industry")
         entry["country"] = meta.get("country")
+        entry["region"] = meta.get("region")
+        entry["ticker_currency"] = meta.get("currency")
+        entry["exchange"] = meta.get("exchange")
         entry["asset_type"] = meta.get("asset_type")
         entry["tags"] = tags_map.get(ticker_key, [])
         auto_tags = _auto_tags_from_entry(entry)
@@ -6411,23 +6991,9 @@ def _list_holdings_for_portfolio(
 
     tickers = [entry["ticker"] for entry in filtered_entries]
     price_cache = _get_cached_prices(tickers)
-    if PRICE_API_KEY:
-        for ticker_value in tickers:
-            cache_key = ticker_value.upper()
-            cached = price_cache.get(cache_key)
-            if cached and _price_is_fresh(cached["updated_at"]):
-                continue
-            try:
-                latest_price = _fetch_latest_price(cache_key)
-            except Exception as exc:
-                logger.warning("Holdings price refresh failed for %s: %s", cache_key, exc)
-                continue
-            _upsert_price(cache_key, latest_price)
-            price_cache[cache_key] = {
-                "price": latest_price,
-                "currency": None,
-                "updated_at": datetime.utcnow().isoformat(),
-            }
+    
+    # No auto-refresh - only use cached prices
+    # User must click "Update All" button to refresh prices via /holdings/refresh-prices endpoint
 
     items = []
     total_value = 0.0
@@ -6439,6 +7005,12 @@ def _list_holdings_for_portfolio(
         )
         if cached_price is None:
             cached_price = entry["current_price"] or entry["avg_price"]
+        
+        # Convert price to portfolio currency if needed
+        ticker_currency = entry.get("ticker_currency") or "USD"
+        if cached_price and ticker_currency != portfolio_currency:
+            cached_price = _convert_currency(cached_price, ticker_currency, portfolio_currency)
+        
         current_value = float(entry["shares"] or 0) * float(cached_price or 0)
         avg_price = (
             float(entry["cost_basis"] or 0) / float(entry["shares"] or 1)
@@ -6466,6 +7038,9 @@ def _list_holdings_for_portfolio(
             "sector": entry.get("sector"),
             "industry": entry.get("industry"),
             "country": entry.get("country"),
+            "region": entry.get("region"),
+            "currency": entry.get("ticker_currency"),
+            "exchange": entry.get("exchange"),
             "asset_type": entry.get("asset_type"),
             "tags": sorted(entry.get("tags", []), key=str.lower),
             "source": entry.get("source"),
@@ -8685,7 +9260,13 @@ def refresh_holding_prices(
     tickers = payload.tickers or [item["ticker"] for item in holdings["items"]]
     results: list[dict] = []
     cache = _get_cached_prices(tickers)
-    for ticker in tickers:
+    
+    import time
+    
+    # Rate limiting: max 59 calls/min = 1 call per 1.02 seconds
+    rate_limit_delay = 1.05  # slightly over 1 second to be safe
+    
+    for idx, ticker in enumerate(tickers):
         cached = cache.get(ticker.upper())
         if cached and _price_is_fresh(cached["updated_at"]) and not payload.force:
             results.append(
@@ -8693,17 +9274,24 @@ def refresh_holding_prices(
                     "ticker": ticker,
                     "status": "cached",
                     "price": cached["price"],
+                    "progress": int((idx + 1) / len(tickers) * 100)
                 }
             )
             continue
+        
         try:
             price_value = _fetch_latest_price(ticker)
             _upsert_price(ticker, price_value)
             results.append(
-                {"ticker": ticker, "status": "updated", "price": price_value}
+                {"ticker": ticker, "status": "updated", "price": price_value, "progress": int((idx + 1) / len(tickers) * 100)}
             )
         except HTTPException as exc:
-            results.append({"ticker": ticker, "status": "error", "error": exc.detail})
+            results.append({"ticker": ticker, "status": "error", "error": exc.detail, "progress": int((idx + 1) / len(tickers) * 100)})
+        
+        # Rate limiting: wait between API calls (not for cached)
+        if idx < len(tickers) - 1 and not cached:
+            time.sleep(rate_limit_delay)
+    
     return {"items": results}
 
 
@@ -8728,7 +9316,13 @@ def refresh_holding_prices_overall(
         unique_tickers = [ticker.upper() for ticker in payload.tickers]
     results: list[dict] = []
     cache = _get_cached_prices(unique_tickers)
-    for ticker in unique_tickers:
+    
+    import time
+    
+    # Rate limiting: max 59 calls/min = 1 call per 1.02 seconds
+    rate_limit_delay = 1.05
+    
+    for idx, ticker in enumerate(unique_tickers):
         cached = cache.get(ticker.upper())
         if cached and _price_is_fresh(cached["updated_at"]) and not payload.force:
             results.append(
@@ -8736,6 +9330,7 @@ def refresh_holding_prices_overall(
                     "ticker": ticker,
                     "status": "cached",
                     "price": cached["price"],
+                    "progress": int((idx + 1) / len(unique_tickers) * 100)
                 }
             )
             continue
@@ -8743,10 +9338,15 @@ def refresh_holding_prices_overall(
             price_value = _fetch_latest_price(ticker)
             _upsert_price(ticker, price_value)
             results.append(
-                {"ticker": ticker, "status": "updated", "price": price_value}
+                {"ticker": ticker, "status": "updated", "price": price_value, "progress": int((idx + 1) / len(unique_tickers) * 100)}
             )
         except HTTPException as exc:
-            results.append({"ticker": ticker, "status": "error", "error": exc.detail})
+            results.append({"ticker": ticker, "status": "error", "error": exc.detail, "progress": int((idx + 1) / len(unique_tickers) * 100)})
+        
+        # Rate limiting: wait between API calls (not for cached)
+        if idx < len(unique_tickers) - 1 and not cached:
+            time.sleep(rate_limit_delay)
+    
     return {"items": results}
 
 
@@ -8954,7 +9554,9 @@ def create_portfolio(
     currency = payload.currency.strip().upper()
     if currency not in ALLOWED_CURRENCIES:
         raise HTTPException(status_code=400, detail="Unsupported currency.")
-    categories = _normalize_categories(payload.custom_categories)
+    # Combine DEFAULT_CATEGORIES with custom categories
+    custom_categories = _normalize_categories(payload.custom_categories)
+    categories = _filter_categories(custom_categories)
     try:
         portfolio = _create_portfolio(session["email"], name, currency, categories)
     except sqlite3.IntegrityError as exc:
@@ -10006,6 +10608,554 @@ def santander_commit(
         "items": len(sanitized),
         "categories": categories,
     }
+
+
+@app.get("/admin/prices")
+def admin_list_prices(
+    authorization: str | None = Header(default=None),
+    search: str | None = None,
+    limit: int = 100
+) -> dict:
+    """Lista todos os preços de tickers armazenados (apenas admin)."""
+    _require_admin(authorization)
+    with _db_connection() as conn:
+        if search:
+            rows = conn.execute(
+                """
+                SELECT ticker, price, currency, updated_at
+                FROM holdings_prices
+                WHERE ticker LIKE ?
+                ORDER BY ticker
+                LIMIT ?
+                """,
+                (f"%{search.upper()}%", limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT ticker, price, currency, updated_at
+                FROM holdings_prices
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+    items = [
+        {
+            "ticker": row["ticker"],
+            "price": float(row["price"]),
+            "currency": row["currency"],
+            "updated_at": row["updated_at"]
+        }
+        for row in rows
+    ]
+    return {"items": items, "total": len(items)}
+
+
+@app.post("/admin/prices")
+def admin_upload_price(
+    payload: TickerPriceUpload,
+    authorization: str | None = Header(default=None)
+) -> dict:
+    """Carrega/atualiza o preço de um ticker (apenas admin)."""
+    _require_admin(authorization)
+    ticker = payload.ticker.strip().upper()
+    if not ticker:
+        raise HTTPException(status_code=400, detail="Ticker is required.")
+    if payload.price <= 0:
+        raise HTTPException(status_code=400, detail="Price must be greater than 0.")
+    
+    now = datetime.utcnow().isoformat()
+    with _db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO holdings_prices (ticker, price, currency, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(ticker) DO UPDATE SET
+                price = excluded.price,
+                currency = excluded.currency,
+                updated_at = excluded.updated_at
+            """,
+            (ticker, payload.price, payload.currency, now),
+        )
+    return {
+        "status": "success",
+        "ticker": ticker,
+        "price": payload.price,
+        "currency": payload.currency,
+        "updated_at": now
+    }
+
+
+@app.post("/admin/prices/bulk")
+def admin_bulk_upload_prices(
+    payload: BulkTickerPriceUpload,
+    authorization: str | None = Header(default=None)
+) -> dict:
+    """Carrega/atualiza múltiplos preços de tickers (apenas admin)."""
+    _require_admin(authorization)
+    if not payload.prices:
+        raise HTTPException(status_code=400, detail="No prices provided.")
+    
+    now = datetime.utcnow().isoformat()
+    success_count = 0
+    errors = []
+    
+    with _db_connection() as conn:
+        for item in payload.prices:
+            ticker = item.ticker.strip().upper()
+            if not ticker:
+                errors.append({"ticker": item.ticker, "error": "Ticker is required"})
+                continue
+            if item.price <= 0:
+                errors.append({"ticker": ticker, "error": "Price must be greater than 0"})
+                continue
+            
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO holdings_prices (ticker, price, currency, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(ticker) DO UPDATE SET
+                        price = excluded.price,
+                        currency = excluded.currency,
+                        updated_at = excluded.updated_at
+                    """,
+                    (ticker, item.price, item.currency, now),
+                )
+                success_count += 1
+            except Exception as e:
+                errors.append({"ticker": ticker, "error": str(e)})
+    
+    return {
+        "status": "completed",
+        "success": success_count,
+        "errors": errors,
+        "updated_at": now
+    }
+
+
+@app.delete("/admin/prices/{ticker}")
+def admin_delete_price(
+    ticker: str,
+    authorization: str | None = Header(default=None)
+) -> dict:
+    """Remove o preço de um ticker (apenas admin)."""
+    _require_admin(authorization)
+    ticker = ticker.strip().upper()
+    with _db_connection() as conn:
+        conn.execute("DELETE FROM holdings_prices WHERE ticker = ?", (ticker,))
+    return {"status": "deleted", "ticker": ticker}
+
+
+@app.post("/admin/tickers/upload")
+async def admin_upload_tickers_excel(
+    file: UploadFile,
+    authorization: str | None = Header(default=None)
+) -> dict:
+    """Upload de ficheiro Excel com lista de tickers (apenas admin)."""
+    _require_admin(authorization)
+    
+    if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="File must be Excel format (.xlsx or .xls)")
+    
+    try:
+        import openpyxl
+        content = await file.read()
+        
+        # Criar ficheiro temporário
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+        
+        # Ler Excel
+        wb = openpyxl.load_workbook(tmp_path)
+        ws = wb.active
+        
+        tickers = []
+        seen_header = False
+        
+        for row in ws.iter_rows(values_only=True):
+            if not row or not row[0]:  # Skip empty rows
+                continue
+            
+            cell_value = str(row[0]).strip().upper()
+            
+            # Skip common header names
+            if cell_value in ['TICKER', 'SYMBOL', 'CODE', 'STOCK', 'NAME']:
+                seen_header = True
+                continue
+            
+            # Skip if it looks like a header and we haven't seen data yet
+            if not seen_header and not tickers and len(cell_value) > 10:
+                seen_header = True
+                continue
+            
+            # Add valid ticker
+            if cell_value and len(cell_value) <= 20:  # Reasonable ticker length
+                tickers.append(cell_value)
+        
+        # Limpar ficheiro temporário
+        import os
+        os.unlink(tmp_path)
+        
+        if not tickers:
+            raise HTTPException(status_code=400, detail="No tickers found in file. Make sure tickers are in the first column.")
+        
+        return {
+            "status": "uploaded",
+            "tickers": tickers,
+            "count": len(tickers)
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
+
+@app.post("/admin/tickers/fetch-metadata")
+def admin_fetch_ticker_metadata(
+    ticker: str,
+    authorization: str | None = Header(default=None)
+) -> dict:
+    """Busca e armazena metadados completos de um ticker (apenas admin).
+    
+    Usa Finnhub se configurado para obter dados abrangentes:
+    - Company profile (name, country, exchange, industry)
+    - Current price
+    - Dividend yield
+    - Next dividend payment date and amount
+    """
+    _require_admin(authorization)
+    ticker = ticker.strip().upper()
+    
+    # Buscar metadados completos usando Finnhub se disponível
+    if PRICE_API_PROVIDER in ("finnhub", "finhub"):
+        metadata = _fetch_metadata_finnhub(ticker)
+        
+        if not metadata or not metadata.get("ticker"):
+            raise HTTPException(status_code=404, detail=f"Could not fetch metadata for {ticker}")
+        
+        # Salvar metadados na base de dados
+        _save_ticker_metadata(metadata)
+        
+        # Salvar preço se disponível
+        price_data = None
+        if metadata.get("price"):
+            now = datetime.utcnow().isoformat()
+            with _db_connection() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO holdings_prices (ticker, price, currency, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(ticker) DO UPDATE SET
+                        price = excluded.price,
+                        currency = excluded.currency,
+                        updated_at = excluded.updated_at
+                    """,
+                    (ticker, metadata["price"], metadata.get("currency", "USD"), now),
+                )
+            price_data = {
+                "ticker": ticker,
+                "price": metadata["price"],
+                "currency": metadata.get("currency", "USD")
+            }
+        
+        return {"status": "success", "metadata": metadata, "price": price_data}
+    
+    else:
+        # Fallback para yfinance (legado)
+        metadata = _fetch_ticker_metadata_yfinance(ticker)
+        if not metadata:
+            raise HTTPException(status_code=404, detail=f"Could not fetch metadata for {ticker}")
+        
+        # Salvar na base de dados
+        _save_ticker_metadata(metadata)
+        
+        # Buscar e salvar preço também
+        price_data = _fetch_ticker_price_yfinance(ticker)
+        if price_data:
+            now = datetime.utcnow().isoformat()
+            with _db_connection() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO holdings_prices (ticker, price, currency, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(ticker) DO UPDATE SET
+                        price = excluded.price,
+                        currency = excluded.currency,
+                        updated_at = excluded.updated_at
+                    """,
+                    (price_data["ticker"], price_data["price"], price_data["currency"], now),
+                )
+        
+        return {"status": "success", "metadata": metadata, "price": price_data}
+
+
+@app.post("/admin/tickers/fetch-bulk")
+async def admin_fetch_bulk_metadata(
+    tickers: list[str],
+    authorization: str | None = Header(default=None)
+) -> dict:
+    """Busca metadados completos e preços para múltiplos tickers (apenas admin).
+    
+    Usa Finnhub API se configurado, com rate limit de 59 calls/min.
+    Cada ticker requer 4 chamadas: profile2, quote, metric, dividend (total ~4.2s por ticker).
+    """
+    _require_admin(authorization)
+    
+    import time
+    
+    success = []
+    errors = []
+    total = len(tickers)
+    
+    # Estimate time: 4 API calls per ticker with 1.05s between = ~4.2s per ticker
+    estimated_time = total * 4.2 if PRICE_API_PROVIDER in ("finnhub", "finhub") else total * 3.0
+    
+    print(f"\n{'='*60}")
+    print(f"Starting comprehensive metadata fetch for {total} tickers...")
+    print(f"Provider: {PRICE_API_PROVIDER}")
+    print(f"Estimated time: {estimated_time:.0f} seconds (~{estimated_time / 60:.1f} minutes)")
+    print(f"{'='*60}\n")
+    
+    for idx, ticker_raw in enumerate(tickers, 1):
+        ticker = ticker_raw.strip().upper()
+        print(f"\n[{idx}/{total}] Processing: {ticker}")
+        
+        try:
+            # Fetch comprehensive metadata using Finnhub (includes rate limiting)
+            if PRICE_API_PROVIDER in ("finnhub", "finhub"):
+                metadata = _fetch_metadata_finnhub(ticker)
+                
+                # Save metadata to database
+                _save_ticker_metadata(metadata)
+                
+                # Save price if available
+                if metadata.get("price"):
+                    _upsert_price(ticker, metadata["price"])
+                    print(f"✓ {ticker}: ${metadata['price']:.2f} | {metadata.get('name', 'N/A')} | {metadata.get('country', 'N/A')} | Div: {metadata.get('dividend_yield', 0):.2%}")
+                else:
+                    print(f"⚠ {ticker}: Metadata saved but no price available")
+                
+                success.append(ticker)
+                
+            else:
+                # Fallback to basic price fetch for other providers
+                price_value = _fetch_latest_price(ticker)
+                
+                # Save basic metadata
+                metadata = {
+                    "ticker": ticker,
+                    "name": ticker,
+                    "asset_class": "Stock",
+                    "sector": None,
+                    "industry": None,
+                    "country": None,
+                    "region": None,
+                    "currency": "USD",
+                    "exchange": None,
+                    "dividend_yield": None,
+                    "dividend_frequency": None,
+                    "next_dividend_date": None,
+                    "next_dividend_amount": None
+                }
+                _save_ticker_metadata(metadata)
+                _upsert_price(ticker, price_value)
+                
+                print(f"✓ {ticker}: Price ${price_value:.2f}")
+                success.append(ticker)
+                
+                # Rate limiting for non-Finnhub providers
+                if idx < total:
+                    time.sleep(3.0)
+                
+        except Exception as e:
+            error_msg = str(e)[:150]
+            errors.append({"ticker": ticker, "error": error_msg})
+            print(f"✗ {ticker}: {error_msg}")
+    
+    print(f"\n{'='*60}")
+    print(f"Bulk fetch completed!")
+    print(f"✓ Success: {len(success)}/{total} ({len(success)/total*100:.1f}%)" if total else "No tickers")
+    print(f"✗ Errors: {len(errors)}/{total}")
+    if errors:
+        print(f"Failed tickers: {', '.join([e['ticker'] for e in errors[:10]])}")
+        if len(errors) > 10:
+            print(f"... and {len(errors) - 10} more")
+    print(f"{'='*60}\n")
+    
+    return {
+        "status": "completed",
+        "success": len(success),
+        "errors": len(errors),
+        "success_tickers": success,
+        "error_details": errors
+    }
+
+
+@app.get("/admin/tickers/metadata")
+def admin_list_metadata(
+    authorization: str | None = Header(default=None),
+    search: str | None = None,
+    limit: int = 100
+) -> dict:
+    """Lista metadados de tickers armazenados com preço atual (apenas admin)."""
+    _require_admin(authorization)
+    
+    with _db_connection() as conn:
+        if search:
+            rows = conn.execute(
+                """
+                SELECT tm.*, hp.price as current_price
+                FROM ticker_metadata tm
+                LEFT JOIN holdings_prices hp ON tm.ticker = hp.ticker
+                WHERE tm.ticker LIKE ? OR tm.name LIKE ?
+                ORDER BY tm.ticker
+                LIMIT ?
+                """,
+                (f"%{search.upper()}%", f"%{search}%", limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT tm.*, hp.price as current_price
+                FROM ticker_metadata tm
+                LEFT JOIN holdings_prices hp ON tm.ticker = hp.ticker
+                ORDER BY tm.last_updated DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+    
+    items = [dict(row) for row in rows]
+    return {"items": items, "total": len(items)}
+
+
+@app.delete("/admin/tickers/{ticker}")
+def admin_delete_ticker(
+    ticker: str,
+    authorization: str | None = Header(default=None)
+) -> dict:
+    """Remove ticker e seus metadados (apenas admin)."""
+    _require_admin(authorization)
+    ticker = ticker.strip().upper()
+    
+    with _db_connection() as conn:
+        conn.execute("DELETE FROM holdings_prices WHERE ticker = ?", (ticker,))
+        conn.execute("DELETE FROM ticker_metadata WHERE ticker = ?", (ticker,))
+    
+    return {"status": "deleted", "ticker": ticker}
+
+
+@app.get("/admin/api-settings")
+def admin_get_api_settings(
+    authorization: str | None = Header(default=None)
+) -> dict:
+    """Lista configurações de API providers (apenas admin)."""
+    _require_admin(authorization)
+    
+    providers = [
+        {
+            "id": "yfinance",
+            "name": "Yahoo Finance (yfinance)",
+            "description": "Free API, no key required. Good for US & European stocks.",
+            "enabled": True,  # Always enabled as fallback
+            "requires_key": False,
+            "has_key": True,
+            "limits": "Rate limited, ~48 requests/hour",
+            "supported_markets": ["US", "EU", "UK", "Asia"]
+        },
+        {
+            "id": "twelvedata",
+            "name": "Twelve Data",
+            "description": "Free tier: 800 requests/day. Supports global markets.",
+            "enabled": PRICE_API_PROVIDER == "twelvedata",
+            "requires_key": True,
+            "has_key": bool(PRICE_API_KEY),
+            "limits": "Free: 800/day, Paid: unlimited",
+            "supported_markets": ["US", "EU", "UK", "Asia", "Crypto"]
+        },
+        {
+            "id": "finnhub",
+            "name": "Finnhub",
+            "description": "Free tier: 60 calls/minute. Focus on US stocks.",
+            "enabled": PRICE_API_PROVIDER == "finnhub",
+            "requires_key": True,
+            "has_key": bool(os.getenv("FINNHUB_API_KEY")),
+            "limits": "Free: 60/min, Paid: higher limits",
+            "supported_markets": ["US", "EU"]
+        }
+    ]
+    
+    return {
+        "providers": providers,
+        "current_provider": PRICE_API_PROVIDER,
+        "fallback": "yfinance"
+    }
+
+
+@app.post("/admin/api-settings/test")
+def admin_test_api_provider(
+    payload: dict,
+    authorization: str | None = Header(default=None)
+) -> dict:
+    """Testa conectividade com um API provider (apenas admin)."""
+    _require_admin(authorization)
+    provider = payload.get("provider")
+    
+    test_ticker = "AAPL"
+    
+    try:
+        if provider == "yfinance":
+            price_data = _fetch_ticker_price_yfinance(test_ticker)
+            if price_data and price_data.get("price"):
+                return {
+                    "status": "success",
+                    "provider": provider,
+                    "test_ticker": test_ticker,
+                    "price": price_data["price"],
+                    "message": "Connection successful"
+                }
+        elif provider == "twelvedata":
+            if not PRICE_API_KEY:
+                return {
+                    "status": "error",
+                    "provider": provider,
+                    "message": "API key not configured. Set PRICE_API_KEY in .env file."
+                }
+            price = _fetch_price_twelvedata(test_ticker)
+            return {
+                "status": "success",
+                "provider": provider,
+                "test_ticker": test_ticker,
+                "price": price,
+                "message": "Connection successful"
+            }
+        elif provider == "finnhub":
+            finnhub_key = os.getenv("FINNHUB_API_KEY")
+            if not finnhub_key:
+                return {
+                    "status": "error",
+                    "provider": provider,
+                    "message": "API key not configured. Set FINNHUB_API_KEY in .env file."
+                }
+            price = _fetch_price_finnhub(test_ticker)
+            return {
+                "status": "success",
+                "provider": provider,
+                "test_ticker": test_ticker,
+                "price": price,
+                "message": "Connection successful"
+            }
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+    except Exception as e:
+        return {
+            "status": "error",
+            "provider": provider,
+            "message": str(e)
+        }
 
 
 @app.post("/auth/google")

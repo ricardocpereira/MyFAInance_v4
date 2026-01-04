@@ -16,6 +16,7 @@ import BankingTransactions from "./pages/BankingTransactions";
 import CockpitOverview from "./pages/CockpitOverview";
 import Debts from "./pages/Debts";
 import MyGoals from "./pages/MyGoals";
+import AdminBackoffice from "./pages/AdminBackoffice";
 import { type Language, translations } from "./content/translations";
 import PortfolioModal from "./components/PortfolioModal";
 
@@ -140,7 +141,8 @@ function App() {
       { path: "/holdings", label: t.nav.stocks, requiresPortfolio: true },
       { path: "/transactions", label: t.nav.transactions, requiresPortfolio: true },
       { path: "/mygoals", label: t.nav.goals },
-      { path: "/debts", label: t.nav.debts, requiresPortfolio: true }
+      { path: "/debts", label: t.nav.debts, requiresPortfolio: true },
+      { path: "/admin", label: "Admin", requiresAdmin: true }
     ],
     [t]
   );
@@ -336,28 +338,30 @@ function App() {
             </div>
           </header>
 
-          <section className="portfolio-strip">
-            <div className="portfolio-row">
-              <div className="portfolio-chips">
-                {portfolios.length === 0 ? (
-                  <span className="portfolio-empty">{t.portfolio.emptyMessage}</span>
-                ) : (
-                  portfolios.map((portfolio) => (
-                    <button
-                      key={portfolio.id}
-                      className={`portfolio-chip${
-                        portfolio.id === activePortfolio?.id ? " active" : ""
-                      }`}
-                      type="button"
-                      onClick={() => setSelectedPortfolioId(portfolio.id)}
-                    >
-                      {portfolio.name}
-                    </button>
-                  ))
-                )}
+          {location.pathname === "/portfolios" ? (
+            <section className="portfolio-strip">
+              <div className="portfolio-row">
+                <div className="portfolio-chips">
+                  {portfolios.length === 0 ? (
+                    <span className="portfolio-empty">{t.portfolio.emptyMessage}</span>
+                  ) : (
+                    portfolios.map((portfolio) => (
+                      <button
+                        key={portfolio.id}
+                        className={`portfolio-chip${
+                          portfolio.id === activePortfolio?.id ? " active" : ""
+                        }`}
+                        type="button"
+                        onClick={() => setSelectedPortfolioId(portfolio.id)}
+                      >
+                        {portfolio.name}
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+          ) : null}
         </>
       ) : null}
 
@@ -456,6 +460,16 @@ function App() {
             element={
               isAuthenticated ? (
                 <Debts t={t} token={authToken} portfolio={activePortfolio} />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              isAuthenticated ? (
+                <AdminBackoffice t={t} token={authToken} />
               ) : (
                 <Navigate to="/" replace />
               )

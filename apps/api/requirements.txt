@@ -5,3 +5,5 @@ python-dotenv==1.0.1
 uvicorn==0.30.6
 xlrd==2.0.1
 pdfplumber==0.11.4
+yfinance==0.2.48
+requests==2.32.3

@@ -24,6 +24,9 @@ type HoldingItem = {
   sector?: string | null;
   industry?: string | null;
   country?: string | null;
+  region?: string | null;
+  currency?: string | null;
+  exchange?: string | null;
   asset_type?: string | null;
   tags?: string[];
   portfolio_id?: number;
@@ -109,6 +112,12 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<number | null>(
     portfolio?.id ?? null
   );
+  const [dashboardView, setDashboardView] = useState<
+    "holdings" | "diversification" | "dividends" | "growth"
+  >("holdings");
+  const [diversificationView, setDiversificationView] = useState<
+    "sectors" | "classes" | "currencies" | "regions" | "countries"
+  >("sectors");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [institutionFilter, setInstitutionFilter] = useState("");
   const [tickerFilter, setTickerFilter] = useState("");
@@ -133,6 +142,7 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
   const [sortKey, setSortKey] = useState<SortKey>("current_value");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshProgress, setRefreshProgress] = useState(0);
   const [infoOpen, setInfoOpen] = useState<string | null>(null);
   const [metaDraft, setMetaDraft] = useState<HoldingMetaDraft | null>(null);
   const [metaSaving, setMetaSaving] = useState(false);
@@ -411,6 +421,111 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
     }
     return Math.max(...chartItems.map((item) => Math.abs(item.value)), 1);
   }, [chartItems]);
+
+  const diversificationData = useMemo(() => {
+    // Asset allocation (classes)
+    const assetGroups = new Map<string, { value: number; count: number }>();
+    filteredHoldings.forEach((item) => {
+      const assetType = item.asset_type || getAssetType(item.category);
+      const entry = assetGroups.get(assetType) || { value: 0, count: 0 };
+      entry.value += Number(item.current_value || 0);
+      entry.count += 1;
+      assetGroups.set(assetType, entry);
+    });
+
+    const assetAllocation = Array.from(assetGroups.entries())
+      .map(([label, data]) => ({
+        label,
+        value: data.value,
+        count: data.count,
+        percentage: totalValue > 0 ? (data.value / totalValue) * 100 : 0
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    // Sector allocation
+    const sectorGroups = new Map<string, { value: number; count: number }>();
+    filteredHoldings.forEach((item) => {
+      const sector = item.sector || "Other";
+      const entry = sectorGroups.get(sector) || { value: 0, count: 0 };
+      entry.value += Number(item.current_value || 0);
+      entry.count += 1;
+      sectorGroups.set(sector, entry);
+    });
+
+    const sectorAllocation = Array.from(sectorGroups.entries())
+      .map(([label, data]) => ({
+        label,
+        value: data.value,
+        count: data.count,
+        percentage: totalValue > 0 ? (data.value / totalValue) * 100 : 0
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    // Region allocation
+    const regionGroups = new Map<string, { value: number; count: number }>();
+    filteredHoldings.forEach((item) => {
+      const region = item.region || item.country || "Other";
+      const entry = regionGroups.get(region) || { value: 0, count: 0 };
+      entry.value += Number(item.current_value || 0);
+      entry.count += 1;
+      regionGroups.set(region, entry);
+    });
+
+    const regionAllocation = Array.from(regionGroups.entries())
+      .map(([label, data]) => ({
+        label,
+        value: data.value,
+        count: data.count,
+        percentage: totalValue > 0 ? (data.value / totalValue) * 100 : 0
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    // Country allocation
+    const countryGroups = new Map<string, { value: number; count: number }>();
+    filteredHoldings.forEach((item) => {
+      const country = item.country || "Other";
+      const entry = countryGroups.get(country) || { value: 0, count: 0 };
+      entry.value += Number(item.current_value || 0);
+      entry.count += 1;
+      countryGroups.set(country, entry);
+    });
+
+    const countryAllocation = Array.from(countryGroups.entries())
+      .map(([label, data]) => ({
+        label,
+        value: data.value,
+        count: data.count,
+        percentage: totalValue > 0 ? (data.value / totalValue) * 100 : 0
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    // Currency allocation
+    const currencyGroups = new Map<string, { value: number; count: number }>();
+    filteredHoldings.forEach((item) => {
+      const currency = item.currency || "USD";
+      const entry = currencyGroups.get(currency) || { value: 0, count: 0 };
+      entry.value += Number(item.current_value || 0);
+      entry.count += 1;
+      currencyGroups.set(currency, entry);
+    });
+
+    const currencyAllocation = Array.from(currencyGroups.entries())
+      .map(([label, data]) => ({
+        label,
+        value: data.value,
+        count: data.count,
+        percentage: totalValue > 0 ? (data.value / totalValue) * 100 : 0
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    return { 
+      assetAllocation, 
+      sectorAllocation, 
+      regionAllocation, 
+      countryAllocation, 
+      currencyAllocation 
+    };
+  }, [filteredHoldings, totalValue]);
 
   const loadHoldings = async () => {
     if (!token) {
@@ -758,6 +873,7 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
       return;
     }
     setRefreshing(true);
+    setRefreshProgress(0);
     setMessage("");
     setError("");
     try {
@@ -777,7 +893,15 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
       if (!response.ok) {
         throw new Error(data?.detail || t.holdings.refreshError);
       }
-      const errorItem = (data.items || []).find((item: any) => item.status === "error");
+      
+      // Calculate average progress from results
+      const items = data.items || [];
+      if (items.length > 0) {
+        const lastProgress = items[items.length - 1]?.progress || 100;
+        setRefreshProgress(lastProgress);
+      }
+      
+      const errorItem = items.find((item: any) => item.status === "error");
       if (errorItem) {
         const errorText = String(errorItem.error || "");
         if (errorText.toLowerCase().includes("price unavailable")) {
@@ -793,6 +917,7 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
       setError(t.holdings.refreshError);
     } finally {
       setRefreshing(false);
+      setRefreshProgress(0);
     }
   };
 
@@ -879,9 +1004,43 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
   return (
     <div className="holdings-page">
       <section className="holdings-header">
-        <div>
-          <h2>{t.holdings.title}</h2>
-          <p>{t.holdings.subtitle}</p>
+        <div className="holdings-header-main">
+          <div className="holdings-title-group">
+            <h2>{t.holdings.title}</h2>
+            <p className="holdings-subtitle-inline">{t.holdings.subtitle}</p>
+          </div>
+          <div className="holdings-dashboard-tabs-inline">
+            <button
+              type="button"
+              className={dashboardView === "holdings" ? "active" : ""}
+              onClick={() => setDashboardView("holdings")}
+            >
+              {t.holdings.dashboard.tabs.holdings}
+            </button>
+            <button
+              type="button"
+              className={dashboardView === "diversification" ? "active" : ""}
+              onClick={() => setDashboardView("diversification")}
+            >
+              {t.holdings.dashboard.tabs.diversification}
+            </button>
+            <button
+              type="button"
+              className={dashboardView === "dividends" ? "active" : ""}
+              onClick={() => setDashboardView("dividends")}
+              disabled
+            >
+              {t.holdings.dashboard.tabs.dividends}
+            </button>
+            <button
+              type="button"
+              className={dashboardView === "growth" ? "active" : ""}
+              onClick={() => setDashboardView("growth")}
+              disabled
+            >
+              {t.holdings.dashboard.tabs.growth}
+            </button>
+          </div>
         </div>
         <div className="holdings-meta">
           <div className="holdings-total">
@@ -894,7 +1053,11 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
             onClick={handleRefreshPrices}
             disabled={refreshing}
           >
-            {refreshing ? t.holdings.updating : t.holdings.updateAll}
+            {refreshing && refreshProgress > 0 
+              ? `${t.holdings.updating} (${refreshProgress}%)` 
+              : refreshing 
+              ? t.holdings.updating 
+              : t.holdings.updateAll}
           </button>
         </div>
       </section>
@@ -985,7 +1148,451 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
       {metaMessage ? <div className="login-banner">{metaMessage}</div> : null}
       {metaError ? <p className="login-error">{metaError}</p> : null}
 
-      <section className="holdings-chart">
+      {dashboardView === "diversification" && (
+        <section className="holdings-dashboard">
+          <div className="diversification-tabs">
+            <button
+              type="button"
+              className={diversificationView === "sectors" ? "active" : ""}
+              onClick={() => setDiversificationView("sectors")}
+            >
+              Sectors
+            </button>
+            <button
+              type="button"
+              className={diversificationView === "classes" ? "active" : ""}
+              onClick={() => setDiversificationView("classes")}
+            >
+              Classes
+            </button>
+            <button
+              type="button"
+              className={diversificationView === "currencies" ? "active" : ""}
+              onClick={() => setDiversificationView("currencies")}
+            >
+              Currencies
+            </button>
+            <button
+              type="button"
+              className={diversificationView === "regions" ? "active" : ""}
+              onClick={() => setDiversificationView("regions")}
+            >
+              Regions
+            </button>
+            <button
+              type="button"
+              className={diversificationView === "countries" ? "active" : ""}
+              onClick={() => setDiversificationView("countries")}
+            >
+              Countries
+            </button>
+          </div>
+          <div className="diversification-container">
+            {filteredHoldings.length === 0 ? (
+              <p className="chart-sub">{t.holdings.dashboard.diversification.empty}</p>
+            ) : (
+              <>
+                {diversificationView === "classes" && (
+                  <div className="diversification-block">
+                    <div className="diversification-block-header">
+                      <h4>{t.holdings.dashboard.diversification.assetAllocation.title}</h4>
+                      <p className="chart-sub">
+                        {t.holdings.dashboard.diversification.assetAllocation.subtitle}
+                      </p>
+                    </div>
+                    <div className="diversification-content">
+                    <div className="donut-chart-container">
+                      <svg className="donut-chart" viewBox="0 0 100 100">
+                        {(() => {
+                          let startAngle = 0;
+                          const colors = [
+                            "#2ad68d",
+                            "#4dabf7",
+                            "#ff6b6b",
+                            "#ffd43b",
+                            "#a78bfa",
+                            "#fb923c"
+                          ];
+                          return diversificationData.assetAllocation.map((item, index) => {
+                            const percentage = item.percentage;
+                            const angle = (percentage / 100) * 360;
+                            const radius = 40;
+                            const cx = 50;
+                            const cy = 50;
+                            const strokeWidth = 15;
+                            const circumference = 2 * Math.PI * radius;
+                            const strokeDasharray = `${
+                              (angle / 360) * circumference
+                            } ${circumference}`;
+                            const rotation = startAngle;
+                            startAngle += angle;
+                            return (
+                              <circle
+                                key={item.label}
+                                cx={cx}
+                                cy={cy}
+                                r={radius}
+                                fill="none"
+                                stroke={colors[index % colors.length]}
+                                strokeWidth={strokeWidth}
+                                strokeDasharray={strokeDasharray}
+                                transform={`rotate(${rotation} ${cx} ${cy})`}
+                                opacity="0.9"
+                              />
+                            );
+                          });
+                        })()}
+                      </svg>
+                      <div className="donut-center-text">
+                        <span className="donut-label">{t.holdings.totalLabel}</span>
+                        <span className="donut-value">{formatCurrency(totalValue)}</span>
+                      </div>
+                    </div>
+                    <div className="diversification-list">
+                      {diversificationData.assetAllocation.map((item, index) => {
+                        const colors = [
+                          "#2ad68d",
+                          "#4dabf7",
+                          "#ff6b6b",
+                          "#ffd43b",
+                          "#a78bfa",
+                          "#fb923c"
+                        ];
+                        return (
+                          <div key={item.label} className="diversification-item">
+                            <div className="diversification-item-label">
+                              <span
+                                className="diversification-color-dot"
+                                style={{ backgroundColor: colors[index % colors.length] }}
+                              />
+                              <div className="diversification-item-info">
+                                <strong>{item.label}</strong>
+                                <small>
+                                  {item.count} {item.count === 1 ? "holding" : "holdings"}
+                                </small>
+                              </div>
+                            </div>
+                            <div className="diversification-item-value">
+                              <span className="percentage">
+                                {item.percentage.toFixed(1)}%
+                              </span>
+                              <span className="amount">{formatCurrency(item.value)}</span>
+                            </div>
+                            <div className="diversification-bar">
+                              <div
+                                className="diversification-bar-fill"
+                                style={{
+                                  width: `${item.percentage}%`,
+                                  backgroundColor: colors[index % colors.length]
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+                )}
+
+                {diversificationView === "sectors" && (
+                <div className="diversification-block">
+                  <div className="diversification-block-header">
+                    <h4>{t.holdings.dashboard.diversification.sectorAllocation.title}</h4>
+                    <p className="chart-sub">
+                      {t.holdings.dashboard.diversification.sectorAllocation.subtitle}
+                    </p>
+                  </div>
+                  <div className="diversification-content">
+                    <div className="donut-chart-container">
+                      <svg className="donut-chart" viewBox="0 0 100 100">
+                        {(() => {
+                          let startAngle = 0;
+                          const colors = [
+                            "#2ad68d",
+                            "#4dabf7",
+                            "#ff6b6b",
+                            "#ffd43b",
+                            "#a78bfa",
+                            "#fb923c",
+                            "#38bdf8",
+                            "#f472b6",
+                            "#10b981"
+                          ];
+                          return diversificationData.sectorAllocation.map((item, index) => {
+                            const percentage = item.percentage;
+                            const angle = (percentage / 100) * 360;
+                            const radius = 40;
+                            const cx = 50;
+                            const cy = 50;
+                            const strokeWidth = 15;
+                            const circumference = 2 * Math.PI * radius;
+                            const strokeDasharray = `${
+                              (angle / 360) * circumference
+                            } ${circumference}`;
+                            const rotation = startAngle;
+                            startAngle += angle;
+                            return (
+                              <circle
+                                key={item.label}
+                                cx={cx}
+                                cy={cy}
+                                r={radius}
+                                fill="none"
+                                stroke={colors[index % colors.length]}
+                                strokeWidth={strokeWidth}
+                                strokeDasharray={strokeDasharray}
+                                transform={`rotate(${rotation} ${cx} ${cy})`}
+                                opacity="0.9"
+                              />
+                            );
+                          });
+                        })()}
+                      </svg>
+                      <div className="donut-center-text">
+                        <span className="donut-label">Sectors</span>
+                        <span className="donut-value">
+                          {diversificationData.sectorAllocation.length}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="diversification-list">
+                      {diversificationData.sectorAllocation.map((item, index) => {
+                        const colors = [
+                          "#2ad68d",
+                          "#4dabf7",
+                          "#ff6b6b",
+                          "#ffd43b",
+                          "#a78bfa",
+                          "#fb923c",
+                          "#38bdf8",
+                          "#f472b6",
+                          "#10b981"
+                        ];
+                        return (
+                          <div key={item.label} className="diversification-item">
+                            <div className="diversification-item-label">
+                              <span
+                                className="diversification-color-dot"
+                                style={{ backgroundColor: colors[index % colors.length] }}
+                              />
+                              <div className="diversification-item-info">
+                                <strong>{item.label}</strong>
+                                <small>
+                                  {item.count} {item.count === 1 ? "holding" : "holdings"}
+                                </small>
+                              </div>
+                            </div>
+                            <div className="diversification-item-value">
+                              <span className="percentage">
+                                {item.percentage.toFixed(1)}%
+                              </span>
+                              <span className="amount">{formatCurrency(item.value)}</span>
+                            </div>
+                            <div className="diversification-bar">
+                              <div
+                                className="diversification-bar-fill"
+                                style={{
+                                  width: `${item.percentage}%`,
+                                  backgroundColor: colors[index % colors.length]
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+                )}
+
+                {diversificationView === "countries" && (
+                <div className="diversification-block">
+                  <div className="diversification-block-header">
+                    <h4>Country Allocation</h4>
+                    <p className="chart-sub">Distribution by country</p>
+                  </div>
+                  <div className="diversification-content">
+                    <div className="donut-chart-container">
+                      <svg className="donut-chart" viewBox="0 0 100 100">
+                        {(() => {
+                          let startAngle = 0;
+                          const colors = ["#2ad68d","#4dabf7","#ff6b6b","#ffd43b","#a78bfa","#fb923c","#38bdf8","#f472b6","#10b981"];
+                          return diversificationData.countryAllocation.map((item, index) => {
+                            const angle = (item.percentage / 100) * 360;
+                            const radius = 40;
+                            const circumference = 2 * Math.PI * radius;
+                            const strokeDasharray = `${(angle / 360) * circumference} ${circumference}`;
+                            const rotation = startAngle;
+                            startAngle += angle;
+                            return (
+                              <circle key={item.label} cx={50} cy={50} r={radius} fill="none"
+                                stroke={colors[index % colors.length]} strokeWidth={15}
+                                strokeDasharray={strokeDasharray} transform={`rotate(${rotation} 50 50)`} opacity="0.9" />
+                            );
+                          });
+                        })()}
+                      </svg>
+                      <div className="donut-center-text">
+                        <span className="donut-label">Countries</span>
+                        <span className="donut-value">{diversificationData.countryAllocation.length}</span>
+                      </div>
+                    </div>
+                    <div className="diversification-list">
+                      {diversificationData.countryAllocation.map((item, index) => {
+                        const colors = ["#2ad68d","#4dabf7","#ff6b6b","#ffd43b","#a78bfa","#fb923c","#38bdf8","#f472b6","#10b981"];
+                        return (
+                          <div key={item.label} className="diversification-item">
+                            <div className="diversification-item-label">
+                              <span className="diversification-color-dot" style={{ backgroundColor: colors[index % colors.length] }} />
+                              <div className="diversification-item-info">
+                                <strong>{item.label}</strong>
+                                <small>{item.count} {item.count === 1 ? "holding" : "holdings"}</small>
+                              </div>
+                            </div>
+                            <div className="diversification-item-value">
+                              <span className="percentage">{item.percentage.toFixed(1)}%</span>
+                              <span className="amount">{formatCurrency(item.value)}</span>
+                            </div>
+                            <div className="diversification-bar">
+                              <div className="diversification-bar-fill" 
+                                style={{ width: `${item.percentage}%`, backgroundColor: colors[index % colors.length] }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+                )}
+
+                {diversificationView === "regions" && (
+                <div className="diversification-block">
+                  <div className="diversification-block-header">
+                    <h4>Region Allocation</h4>
+                    <p className="chart-sub">Distribution by region</p>
+                  </div>
+                  <div className="diversification-content">
+                    <div className="donut-chart-container">
+                      <svg className="donut-chart" viewBox="0 0 100 100">
+                        {(() => {
+                          let startAngle = 0;
+                          const colors = ["#2ad68d","#4dabf7","#ff6b6b","#ffd43b","#a78bfa","#fb923c","#38bdf8","#f472b6","#10b981"];
+                          return diversificationData.regionAllocation.map((item, index) => {
+                            const angle = (item.percentage / 100) * 360;
+                            const radius = 40;
+                            const circumference = 2 * Math.PI * radius;
+                            const strokeDasharray = `${(angle / 360) * circumference} ${circumference}`;
+                            const rotation = startAngle;
+                            startAngle += angle;
+                            return (
+                              <circle key={item.label} cx={50} cy={50} r={radius} fill="none"
+                                stroke={colors[index % colors.length]} strokeWidth={15}
+                                strokeDasharray={strokeDasharray} transform={`rotate(${rotation} 50 50)`} opacity="0.9" />
+                            );
+                          });
+                        })()}
+                      </svg>
+                      <div className="donut-center-text">
+                        <span className="donut-label">Regions</span>
+                        <span className="donut-value">{diversificationData.regionAllocation.length}</span>
+                      </div>
+                    </div>
+                    <div className="diversification-list">
+                      {diversificationData.regionAllocation.map((item, index) => {
+                        const colors = ["#2ad68d","#4dabf7","#ff6b6b","#ffd43b","#a78bfa","#fb923c","#38bdf8","#f472b6","#10b981"];
+                        return (
+                          <div key={item.label} className="diversification-item">
+                            <div className="diversification-item-label">
+                              <span className="diversification-color-dot" style={{ backgroundColor: colors[index % colors.length] }} />
+                              <div className="diversification-item-info">
+                                <strong>{item.label}</strong>
+                                <small>{item.count} {item.count === 1 ? "holding" : "holdings"}</small>
+                              </div>
+                            </div>
+                            <div className="diversification-item-value">
+                              <span className="percentage">{item.percentage.toFixed(1)}%</span>
+                              <span className="amount">{formatCurrency(item.value)}</span>
+                            </div>
+                            <div className="diversification-bar">
+                              <div className="diversification-bar-fill" 
+                                style={{ width: `${item.percentage}%`, backgroundColor: colors[index % colors.length] }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+                )}
+
+                {diversificationView === "currencies" && (
+                <div className="diversification-block">
+                  <div className="diversification-block-header">
+                    <h4>Currency Allocation</h4>
+                    <p className="chart-sub">Distribution by currency</p>
+                  </div>
+                  <div className="diversification-content">
+                    <div className="donut-chart-container">
+                      <svg className="donut-chart" viewBox="0 0 100 100">
+                        {(() => {
+                          let startAngle = 0;
+                          const colors = ["#2ad68d","#4dabf7","#ff6b6b","#ffd43b","#a78bfa","#fb923c","#38bdf8","#f472b6","#10b981"];
+                          return diversificationData.currencyAllocation.map((item, index) => {
+                            const angle = (item.percentage / 100) * 360;
+                            const radius = 40;
+                            const circumference = 2 * Math.PI * radius;
+                            const strokeDasharray = `${(angle / 360) * circumference} ${circumference}`;
+                            const rotation = startAngle;
+                            startAngle += angle;
+                            return (
+                              <circle key={item.label} cx={50} cy={50} r={radius} fill="none"
+                                stroke={colors[index % colors.length]} strokeWidth={15}
+                                strokeDasharray={strokeDasharray} transform={`rotate(${rotation} 50 50)`} opacity="0.9" />
+                            );
+                          });
+                        })()}
+                      </svg>
+                      <div className="donut-center-text">
+                        <span className="donut-label">Currencies</span>
+                        <span className="donut-value">{diversificationData.currencyAllocation.length}</span>
+                      </div>
+                    </div>
+                    <div className="diversification-list">
+                      {diversificationData.currencyAllocation.map((item, index) => {
+                        const colors = ["#2ad68d","#4dabf7","#ff6b6b","#ffd43b","#a78bfa","#fb923c","#38bdf8","#f472b6","#10b981"];
+                        return (
+                          <div key={item.label} className="diversification-item">
+                            <div className="diversification-item-label">
+                              <span className="diversification-color-dot" style={{ backgroundColor: colors[index % colors.length] }} />
+                              <div className="diversification-item-info">
+                                <strong>{item.label}</strong>
+                                <small>{item.count} {item.count === 1 ? "holding" : "holdings"}</small>
+                              </div>
+                            </div>
+                            <div className="diversification-item-value">
+                              <span className="percentage">{item.percentage.toFixed(1)}%</span>
+                              <span className="amount">{formatCurrency(item.value)}</span>
+                            </div>
+                            <div className="diversification-bar">
+                              <div className="diversification-bar-fill" 
+                                style={{ width: `${item.percentage}%`, backgroundColor: colors[index % colors.length] }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
+      {dashboardView === "growth" && (
+        <section className="holdings-chart">
         <div className="holdings-chart-header">
           <h3>{t.holdings.chart.title}</h3>
           <div className="holdings-chart-toggle">
@@ -1099,8 +1706,10 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
           )}
         </div>
       </section>
+      )}
 
-      <section className="holdings-table-wrap">
+      {dashboardView === "holdings" && (
+        <section className="holdings-table-wrap">
         <div className="holdings-table-header">
           <h3>{t.holdings.tableTitle}</h3>
           <div className="holdings-chip-row">
@@ -1295,7 +1904,8 @@ function Holdings({ t, token, portfolio, portfolios }: HoldingsProps) {
             ))}
           </div>
         )}
-      </section>
+        </section>
+      )}
 
       {metaDraft ? (
         <div className="holding-meta-modal" onClick={closeMetaEditor}>
