@@ -289,6 +289,13 @@ function App() {
     }
   };
 
+  const handleScrollToSnapshots = () => {
+    const element = document.getElementById('snapshots-section');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
   const activePortfolio =
     selectedPortfolioId === -1
       ? { id: -1, name: "Aggregated Portfolio", currency: "EUR", categories: [] }
@@ -408,13 +415,23 @@ function App() {
                   )}
                 </div>
                 {selectedPortfolioId === -1 && (
-                  <button
-                    className="portfolio-chip create-snapshot"
-                    type="button"
-                    onClick={handleCreateSnapshot}
-                  >
-                    📸 Create Snapshot
-                  </button>
+                  <>
+                    <button
+                      className="portfolio-chip create-snapshot"
+                      type="button"
+                      onClick={handleCreateSnapshot}
+                    >
+                      📸 Create Snapshot
+                    </button>
+                    <button
+                      className="portfolio-chip create-snapshot"
+                      type="button"
+                      onClick={handleScrollToSnapshots}
+                      style={{ background: "linear-gradient(135deg, #51cf66 0%, #37b24d 100%)" }}
+                    >
+                      📋 Snapshot History
+                    </button>
+                  </>
                 )}
               </div>
             </section>

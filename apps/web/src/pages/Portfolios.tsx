@@ -84,6 +84,19 @@ function Portfolios({
   >([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [snapshots, setSnapshots] = useState<
+    {
+      id: number;
+      snapshot_date: string;
+      total_value: number;
+      total_invested: number;
+      total_profit: number;
+      profit_percent: number;
+      created_at: string;
+    }[]
+  >([]);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
+  const [snapshotsError, setSnapshotsError] = useState("");
   const API_BASE = "http://127.0.0.1:8000";
 
   const institutionLogos: Record<string, string> = {
@@ -543,7 +556,46 @@ function Portfolios({
       setHistoryMonthly([]);
       setHistoryDaily([]);
       setHistoryLoading(false);
-      return;
+      
+      // Load snapshots for aggregated portfolio
+      let snapshotActive = true;
+      setSnapshotsLoading(true);
+      setSnapshotsError("");
+      fetch(`${API_BASE}/portfolios/aggregated/snapshots`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+        .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+        .then(({ ok, data }) => {
+          if (!snapshotActive) return;
+          if (!ok) {
+            throw new Error(data?.detail || "error");
+          }
+          const items = (data.items || []).map((item: any) => ({
+            id: Number(item.id) || 0,
+            snapshot_date: item.snapshot_date,
+            total_value: Number(item.total_value) || 0,
+            total_invested: Number(item.total_invested) || 0,
+            total_profit: Number(item.total_profit) || 0,
+            profit_percent: Number(item.profit_percent) || 0,
+            created_at: item.created_at
+          }));
+          setSnapshots(items);
+        })
+        .catch(() => {
+          if (snapshotActive) {
+            setSnapshotsError(t.past?.noData || "No snapshots yet");
+          }
+        })
+        .finally(() => {
+          if (snapshotActive) {
+            setSnapshotsLoading(false);
+          }
+        });
+      return () => {
+        snapshotActive = false;
+      };
     }
     let active = true;
     setHistoryLoading(true);
@@ -596,6 +648,52 @@ function Portfolios({
       active = false;
     };
   }, [API_BASE, portfolio, refreshTick, t, token]);
+
+  const handleDeleteSnapshot = async (snapshotId: number) => {
+    if (!confirm("Delete this snapshot?")) return;
+    
+    try {
+      const response = await fetch(
+        `${API_BASE}/portfolios/aggregated/snapshots/${snapshotId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data?.detail || "Failed to delete snapshot");
+      }
+      setRefreshTick((value) => value + 1);
+    } catch (err) {
+      alert(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  };
+
+  const handleClearAllSnapshots = async () => {
+    if (!confirm("Delete ALL snapshots? This cannot be undone!")) return;
+    
+    try {
+      const response = await fetch(
+        `${API_BASE}/portfolios/aggregated/snapshots`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data?.detail || "Failed to clear snapshots");
+      }
+      setRefreshTick((value) => value + 1);
+    } catch (err) {
+      alert(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  };
 
   const handleClearData = async () => {
     if (!portfolio) {
@@ -1106,49 +1204,105 @@ function Portfolios({
         </div>
       </section>
 
-      <section className="past-days">
+      <section className="past-days" id="snapshots-section">
         <div className="section-head">
-          <h3>{t.past.title}</h3>
-          <span className="chart-sub">{t.past.subtitle}</span>
+          <h3>{portfolio?.id === -1 ? "Snapshots History" : t.past.title}</h3>
+          <span className="chart-sub">{portfolio?.id === -1 ? "Historical snapshots of aggregated portfolio" : t.past.subtitle}</span>
         </div>
-        <div className="table compact">
-          <div className="row head">
-            <span>{t.past.columns.date}</span>
-            <span>{t.past.columns.total}</span>
-            <span>{t.past.columns.change}</span>
-            <span>{t.past.columns.cash}</span>
-            <span>{t.past.columns.emergency}</span>
-            <span>{t.past.columns.invested}</span>
-          </div>
-          {historyLoading ? <p className="chart-sub">{t.portfolio.loading}</p> : null}
-          {historyError ? <p className="login-error">{historyError}</p> : null}
-          {!historyLoading && !historyError && pastRows.length === 0 ? (
-            <p className="chart-sub">{t.past.noData}</p>
-          ) : null}
-          {pastRows.map((row) => (
-            <div className="row" key={row.date}>
-              <span>{row.date}</span>
-              <span>{formatCurrency(row.total)}</span>
-              <span
-                className={
-                  row.change === null || row.change === undefined
-                    ? ""
-                    : row.change >= 0
-                    ? "pos"
-                    : "neg"
-                }
-              >
-                {row.change === null ? "--" : formatSignedCurrency(row.change)}
-                {row.changePercent === null || row.change === null
-                  ? ""
-                  : ` (${formatSignedPercent(row.changePercent * 100)})`}
-              </span>
-              <span>{formatCurrency(row.cash)}</span>
-              <span>{formatCurrency(row.emergency)}</span>
-              <span>{formatCurrency(row.invested)}</span>
+        
+        {portfolio?.id === -1 ? (
+          // Render snapshots for aggregated portfolio
+          <>
+            <div className="table compact">
+              <div className="row head">
+                <span>Date</span>
+                <span>Total Value</span>
+                <span>Invested</span>
+                <span>Profit</span>
+                <span>Profit %</span>
+                <span>Actions</span>
+              </div>
+              {snapshotsLoading ? <p className="chart-sub">{t.portfolio.loading}</p> : null}
+              {snapshotsError ? <p className="login-error">{snapshotsError}</p> : null}
+              {!snapshotsLoading && !snapshotsError && snapshots.length === 0 ? (
+                <p className="chart-sub">No snapshots yet. Click "Create Snapshot" to start tracking.</p>
+              ) : null}
+              {snapshots.map((snapshot) => (
+                <div className="row" key={snapshot.id}>
+                  <span>{snapshot.snapshot_date}</span>
+                  <span>{formatCurrency(snapshot.total_value)}</span>
+                  <span>{formatCurrency(snapshot.total_invested)}</span>
+                  <span className={snapshot.total_profit >= 0 ? "pos" : "neg"}>
+                    {formatSignedCurrency(snapshot.total_profit)}
+                  </span>
+                  <span className={snapshot.profit_percent >= 0 ? "pos" : "neg"}>
+                    {formatSignedPercent(snapshot.profit_percent)}
+                  </span>
+                  <span>
+                    <button 
+                      className="ghost-btn" 
+                      type="button"
+                      onClick={() => handleDeleteSnapshot(snapshot.id)}
+                      style={{ padding: "4px 8px", fontSize: "12px" }}
+                    >
+                      Delete
+                    </button>
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+            {snapshots.length > 0 && (
+              <button
+                className="ghost-btn"
+                type="button"
+                onClick={handleClearAllSnapshots}
+                style={{ marginTop: "12px" }}
+              >
+                Clear All Snapshots
+              </button>
+            )}
+          </>
+        ) : (
+          // Render daily history for regular portfolios
+          <div className="table compact">
+            <div className="row head">
+              <span>{t.past.columns.date}</span>
+              <span>{t.past.columns.total}</span>
+              <span>{t.past.columns.change}</span>
+              <span>{t.past.columns.cash}</span>
+              <span>{t.past.columns.emergency}</span>
+              <span>{t.past.columns.invested}</span>
+            </div>
+            {historyLoading ? <p className="chart-sub">{t.portfolio.loading}</p> : null}
+            {historyError ? <p className="login-error">{historyError}</p> : null}
+            {!historyLoading && !historyError && pastRows.length === 0 ? (
+              <p className="chart-sub">{t.past.noData}</p>
+            ) : null}
+            {pastRows.map((row) => (
+              <div className="row" key={row.date}>
+                <span>{row.date}</span>
+                <span>{formatCurrency(row.total)}</span>
+                <span
+                  className={
+                    row.change === null || row.change === undefined
+                      ? ""
+                      : row.change >= 0
+                      ? "pos"
+                      : "neg"
+                  }
+                >
+                  {row.change === null ? "--" : formatSignedCurrency(row.change)}
+                  {row.changePercent === null || row.change === null
+                    ? ""
+                    : ` (${formatSignedPercent(row.changePercent * 100)})`}
+                </span>
+                <span>{formatCurrency(row.cash)}</span>
+                <span>{formatCurrency(row.emergency)}</span>
+                <span>{formatCurrency(row.invested)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
     </>

@@ -9144,6 +9144,50 @@ def list_aggregated_snapshots(authorization: str | None = Header(default=None)) 
     return {"items": items}
 
 
+@app.delete("/portfolios/aggregated/snapshots/{snapshot_id}")
+def delete_aggregated_snapshot(
+    snapshot_id: int,
+    authorization: str | None = Header(default=None)
+) -> dict:
+    """Apaga um snapshot específico do portfolio agregado."""
+    session = _require_session(authorization)
+    
+    with _db_connection() as conn:
+        # Verify ownership before deleting
+        row = conn.execute(
+            "SELECT owner_email FROM aggregated_snapshots WHERE id = ?",
+            (snapshot_id,)
+        ).fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Snapshot not found.")
+        
+        if row["owner_email"] != session["email"]:
+            raise HTTPException(status_code=403, detail="Not authorized.")
+        
+        conn.execute(
+            "DELETE FROM aggregated_snapshots WHERE id = ?",
+            (snapshot_id,)
+        )
+    
+    return {"status": "deleted", "snapshot_id": snapshot_id}
+
+
+@app.delete("/portfolios/aggregated/snapshots")
+def clear_all_aggregated_snapshots(authorization: str | None = Header(default=None)) -> dict:
+    """Apaga todos os snapshots do portfolio agregado do utilizador."""
+    session = _require_session(authorization)
+    
+    with _db_connection() as conn:
+        cursor = conn.execute(
+            "DELETE FROM aggregated_snapshots WHERE owner_email = ?",
+            (session["email"],)
+        )
+        deleted_count = cursor.rowcount
+    
+    return {"status": "cleared", "deleted_count": deleted_count}
+
+
 @app.get("/portfolios/{portfolio_id}/summary")
 def portfolio_summary(
     portfolio_id: int, authorization: str | None = Header(default=None)
