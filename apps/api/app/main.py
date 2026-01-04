@@ -9078,7 +9078,7 @@ def create_aggregated_snapshot(authorization: str | None = Header(default=None))
     with _db_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO aggregated_snapshots (
+            INSERT OR REPLACE INTO aggregated_snapshots (
                 owner_email,
                 snapshot_date,
                 total_value,

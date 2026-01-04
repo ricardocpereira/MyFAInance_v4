@@ -160,8 +160,33 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
         }
       });
     } else {
-      // For aggregated portfolio, clear history
-      setHistoryMonthly([]);
+      // For aggregated portfolio, load snapshots instead of monthly history
+      fetchJson(`/portfolios/aggregated/snapshots`)
+        .then(({ ok, data }) => {
+          if (!active) {
+            return;
+          }
+          if (!ok) {
+            throw new Error("snapshots");
+          }
+          // Convert snapshots to monthly history format
+          const items = (data.items || []).map((item: any) => {
+            // Extract year-month from snapshot_date (format: YYYY-MM-DD)
+            const month = item.snapshot_date.substring(0, 7); // Get YYYY-MM
+            return {
+              month: month,
+              total: Number(item.total_value) || 0
+            };
+          });
+          // Sort by month
+          items.sort((a: any, b: any) => a.month.localeCompare(b.month));
+          setHistoryMonthly(items);
+        })
+        .catch(() => {
+          if (active) {
+            setHistoryError(t.charts.noHistory);
+          }
+        });
     }
 
     // Skip institutions for aggregated portfolio (ID -1)
