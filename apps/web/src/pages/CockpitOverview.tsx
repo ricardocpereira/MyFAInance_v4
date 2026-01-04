@@ -49,9 +49,17 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
   } | null>(null);
   const [summaryError, setSummaryError] = useState("");
   const [historyMonthly, setHistoryMonthly] = useState<
-    { month: string; total: number }[]
+    { month: string; total: number; invested?: number; profit?: number }[]
   >([]);
   const [historyError, setHistoryError] = useState("");
+  const [tooltipData, setTooltipData] = useState<{
+    x: number;
+    y: number;
+    month: string;
+    total: number;
+    invested?: number;
+    profit?: number;
+  } | null>(null);
   const [institutions, setInstitutions] = useState<InstitutionRow[]>([]);
   const [institutionsError, setInstitutionsError] = useState("");
   const [budgets, setBudgets] = useState<BudgetRow[]>([]);
@@ -169,16 +177,16 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
           if (!ok) {
             throw new Error("snapshots");
           }
-          // Convert snapshots to monthly history format
+          // Convert snapshots to monthly history format with all data
           const items = (data.items || []).map((item: any) => {
-            // Extract year-month from snapshot_date (format: YYYY-MM-DD)
-            const month = item.snapshot_date.substring(0, 7); // Get YYYY-MM
             return {
-              month: month,
-              total: Number(item.total_value) || 0
+              month: item.snapshot_date, // Use full date for snapshots
+              total: Number(item.total_value) || 0,
+              invested: Number(item.total_invested) || 0,
+              profit: Number(item.total_profit) || 0
             };
           });
-          // Sort by month
+          // Sort by date
           items.sort((a: any, b: any) => a.month.localeCompare(b.month));
           setHistoryMonthly(items);
         })
@@ -422,6 +430,44 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
     return `${topPath} L ${points[points.length - 1].x} ${bottomY} L ${points[0].x} ${bottomY} Z`;
   }, [chartSeries, historyRange.max, historyRange.min]);
 
+  const investedPath = useMemo(() => {
+    if (chartSeries.length < 2 || !chartSeries[0].invested) {
+      return "";
+    }
+    const width = 340;
+    const height = 120;
+    const padding = 12;
+    const range = historyRange.max - historyRange.min || 1;
+    const step = width / (chartSeries.length - 1);
+    return chartSeries
+      .map((item, index) => {
+        const x = padding + index * step;
+        const invested = item.invested || 0;
+        const y = padding + (height - ((invested - historyRange.min) / range) * height);
+        return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+      })
+      .join(" ");
+  }, [chartSeries, historyRange.max, historyRange.min]);
+
+  const profitPath = useMemo(() => {
+    if (chartSeries.length < 2 || !chartSeries[0].profit) {
+      return "";
+    }
+    const width = 340;
+    const height = 120;
+    const padding = 12;
+    const range = historyRange.max - historyRange.min || 1;
+    const step = width / (chartSeries.length - 1);
+    return chartSeries
+      .map((item, index) => {
+        const x = padding + index * step;
+        const profit = item.profit || 0;
+        const y = padding + (height - ((profit - historyRange.min) / range) * height);
+        return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+      })
+      .join(" ");
+  }, [chartSeries, historyRange.max, historyRange.min]);
+
   const performanceDelta = useMemo(() => {
     if (chartSeries.length < 2) {
       return { value: 0, percent: 0 };
@@ -521,16 +567,85 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
           {summaryError ? <p className="login-error">{summaryError}</p> : null}
           {historyError ? <p className="login-error">{historyError}</p> : null}
           {historyPath ? (
-            <svg className="cockpit-chart" viewBox="0 0 360 150" preserveAspectRatio="none">
-              <path className="chart-area" d={historyAreaPath} />
-              <path
-                className="chart-line-path"
-                d={historyPath}
-                stroke="#2ad68d"
-                strokeWidth="3"
-                fill="none"
-              />
-            </svg>
+            <div style={{ position: "relative" }}>
+              <svg 
+                className="cockpit-chart" 
+                viewBox="0 0 360 150" 
+                preserveAspectRatio="none"
+                onMouseMove={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = ((e.clientX - rect.left) / rect.width) * 360;
+                  const index = Math.round((x - 12) / (340 / (chartSeries.length - 1)));
+                  if (index >= 0 && index < chartSeries.length) {
+                    const item = chartSeries[index];
+                    setTooltipData({
+                      x: e.clientX - rect.left,
+                      y: e.clientY - rect.top,
+                      month: item.month,
+                      total: item.total,
+                      invested: item.invested,
+                      profit: item.profit
+                    });
+                  }
+                }}
+                onMouseLeave={() => setTooltipData(null)}
+              >
+                <path className="chart-area" d={historyAreaPath} />
+                <path
+                  className="chart-line-path"
+                  d={historyPath}
+                  stroke="#2ad68d"
+                  strokeWidth="3"
+                  fill="none"
+                />
+                {investedPath && (
+                  <path
+                    className="chart-line-path"
+                    d={investedPath}
+                    stroke="#4dabf7"
+                    strokeWidth="2"
+                    fill="none"
+                    strokeDasharray="5,5"
+                  />
+                )}
+                {profitPath && (
+                  <path
+                    className="chart-line-path"
+                    d={profitPath}
+                    stroke="#ffd43b"
+                    strokeWidth="2"
+                    fill="none"
+                    strokeDasharray="3,3"
+                  />
+                )}
+              </svg>
+              {tooltipData && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: tooltipData.x + 10,
+                    top: tooltipData.y - 10,
+                    background: "rgba(0, 0, 0, 0.9)",
+                    color: "white",
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    pointerEvents: "none",
+                    zIndex: 1000,
+                    whiteSpace: "nowrap"
+                  }}
+                >
+                  <div style={{ fontWeight: "bold", marginBottom: "4px" }}>{tooltipData.month}</div>
+                  <div style={{ color: "#2ad68d" }}>Total: {formatCurrency(tooltipData.total)}</div>
+                  {tooltipData.invested !== undefined && (
+                    <div style={{ color: "#4dabf7" }}>Invested: {formatCurrency(tooltipData.invested)}</div>
+                  )}
+                  {tooltipData.profit !== undefined && (
+                    <div style={{ color: "#ffd43b" }}>Profit: {formatCurrency(tooltipData.profit)}</div>
+                  )}
+                </div>
+              )}
+            </div>
           ) : (
             <p className="chart-sub">{t.charts.noHistory}</p>
           )}
