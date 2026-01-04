@@ -9024,7 +9024,7 @@ def aggregated_portfolio_summary(authorization: str | None = Header(default=None
     
     for portfolio in portfolios:
         portfolio_id = portfolio["id"]
-        categories = _filter_categories(json.loads(portfolio["categories_json"]))
+        categories = portfolio["categories"]  # Already filtered by _list_portfolios
         _ensure_category_settings(portfolio_id, categories)
         settings = _get_category_settings(portfolio_id)
         settings_lookup = {_normalize_text(key): value for key, value in settings.items()}

@@ -112,7 +112,12 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
         }
       }).then((response) => response.json().then((data) => ({ ok: response.ok, data })));
 
-    fetchJson(`/portfolios/${portfolio.id}/summary`)
+    // Use aggregated endpoint if portfolio ID is -1
+    const summaryPath = portfolio.id === -1 
+      ? `/portfolios/aggregated/summary`
+      : `/portfolios/${portfolio.id}/summary`;
+    
+    fetchJson(summaryPath)
       .then(({ ok, data }) => {
         if (!active) {
           return;
@@ -133,7 +138,9 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
         }
       });
 
-    fetchJson(`/portfolios/${portfolio.id}/history/monthly`)
+    // Skip history for aggregated portfolio (ID -1)
+    if (portfolio.id !== -1) {
+      fetchJson(`/portfolios/${portfolio.id}/history/monthly`)
       .then(({ ok, data }) => {
         if (!active) {
           return;
@@ -152,8 +159,14 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
           setHistoryError(t.charts.noHistory);
         }
       });
+    } else {
+      // For aggregated portfolio, clear history
+      setHistoryMonthly([]);
+    }
 
-    fetchJson(`/portfolios/${portfolio.id}/institutions`)
+    // Skip institutions for aggregated portfolio (ID -1)
+    if (portfolio.id !== -1) {
+      fetchJson(`/portfolios/${portfolio.id}/institutions`)
       .then(({ ok, data }) => {
         if (!active) {
           return;
@@ -184,9 +197,15 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
           setInstitutionsError(t.breakdown.noData);
         }
       });
+    } else {
+      // For aggregated portfolio, clear institutions
+      setInstitutions([]);
+    }
 
-    const currentMonth = new Date().toISOString().slice(0, 7);
-    fetchJson(`/portfolios/${portfolio.id}/banking/budgets?month=${currentMonth}`)
+    // Skip banking budgets for aggregated portfolio (ID -1)
+    if (portfolio.id !== -1) {
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      fetchJson(`/portfolios/${portfolio.id}/banking/budgets?month=${currentMonth}`)
       .then(({ ok, data }) => {
         if (!active) {
           return;
@@ -209,6 +228,10 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
           setBudgetsError(t.bankings?.budgets?.empty || "No budgets yet.");
         }
       });
+    } else {
+      // For aggregated portfolio, clear budgets
+      setBudgets([]);
+    }
 
     fetchJson(`/debts`)
       .then(({ ok, data }) => {
