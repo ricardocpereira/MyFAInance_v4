@@ -466,6 +466,7 @@ function App() {
                   t={t}
                   token={authToken}
                   portfolio={activePortfolio}
+                  portfolios={portfolios}
                 />
               ) : (
                 <Navigate to="/" replace />

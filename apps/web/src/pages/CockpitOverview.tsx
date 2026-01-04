@@ -36,11 +36,12 @@ type CockpitProps = {
   t: Translation;
   token: string;
   portfolio?: Portfolio | null;
+  portfolios: Portfolio[];
 };
 
 const API_BASE = "http://127.0.0.1:8000";
 
-function CockpitOverview({ t, token, portfolio }: CockpitProps) {
+function CockpitOverview({ t, token, portfolio, portfolios }: CockpitProps) {
   const [summary, setSummary] = useState<{
     total: number;
     total_invested: number;
@@ -75,6 +76,9 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
     fire_status?: string | null;
   } | null>(null);
   const [fireError, setFireError] = useState("");
+  const [subPortfolios, setSubPortfolios] = useState<
+    { id: number; name: string; total: number; profit: number; profit_percent: number }[]
+  >([]);
 
   const currencyLabel = portfolio?.currency || "EUR";
   const currencyFormatter = useMemo(
@@ -347,6 +351,50 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
     };
   }, [portfolio?.id, t, token]);
 
+  // Load sub-portfolios summaries when viewing aggregated portfolio
+  useEffect(() => {
+    if (!portfolio || portfolio.id !== -1 || !token || portfolios.length === 0) {
+      setSubPortfolios([]);
+      return;
+    }
+    
+    let active = true;
+    
+    const fetchJson = (path: string) =>
+      fetch(`${API_BASE}${path}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }).then((response) => response.json().then((data) => ({ ok: response.ok, data })));
+    
+    // Load summary for each portfolio
+    Promise.all(
+      portfolios.map((p) =>
+        fetchJson(`/portfolios/${p.id}/summary`)
+          .then(({ ok, data }) => {
+            if (!ok) return null;
+            return {
+              id: p.id,
+              name: p.name,
+              total: Number(data.total) || 0,
+              profit: Number(data.total_profit) || 0,
+              profit_percent: Number(data.profit_percent) || 0
+            };
+          })
+          .catch(() => null)
+      )
+    ).then((results) => {
+      if (active) {
+        const validResults = results.filter((r) => r !== null);
+        setSubPortfolios(validResults as any);
+      }
+    });
+    
+    return () => {
+      active = false;
+    };
+  }, [portfolio?.id, token, portfolios]);
+
   const debtTotals = useMemo(() => {
     const totalBalance = debts.reduce(
       (sum, item) => sum + (Number(item.current_balance) || 0),
@@ -567,117 +615,137 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
           {summaryError ? <p className="login-error">{summaryError}</p> : null}
           {historyError ? <p className="login-error">{historyError}</p> : null}
           {historyPath ? (
-            <div style={{ position: "relative", height: "200px" }}>
-              <svg 
-                className="cockpit-chart" 
-                viewBox="0 0 360 170" 
-                preserveAspectRatio="xMidYMid meet"
-                style={{ width: "100%", height: "100%" }}
-                onMouseMove={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const x = ((e.clientX - rect.left) / rect.width) * 360;
-                  const index = Math.round((x - 12) / (340 / (chartSeries.length - 1)));
-                  if (index >= 0 && index < chartSeries.length) {
-                    const item = chartSeries[index];
-                    setTooltipData({
-                      x: e.clientX - rect.left,
-                      y: e.clientY - rect.top,
-                      month: item.month,
-                      total: item.total,
-                      invested: item.invested,
-                      profit: item.profit
-                    });
-                  }
-                }}
-                onMouseLeave={() => setTooltipData(null)}
-              >
-                <path className="chart-area" d={historyAreaPath} />
-                <path
-                  className="chart-line-path"
-                  d={historyPath}
-                  stroke="#2ad68d"
-                  strokeWidth="3"
-                  fill="none"
-                />
-                {investedPath && (
+            <>
+              <div style={{ position: "relative", height: "280px" }}>
+                <svg 
+                  className="cockpit-chart" 
+                  viewBox="0 0 360 170" 
+                  preserveAspectRatio="xMidYMid meet"
+                  style={{ width: "100%", height: "100%" }}
+                  onMouseMove={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = ((e.clientX - rect.left) / rect.width) * 360;
+                    const index = Math.round((x - 12) / (340 / (chartSeries.length - 1)));
+                    if (index >= 0 && index < chartSeries.length) {
+                      const item = chartSeries[index];
+                      setTooltipData({
+                        x: e.clientX - rect.left,
+                        y: e.clientY - rect.top,
+                        month: item.month,
+                        total: item.total,
+                        invested: item.invested,
+                        profit: item.profit
+                      });
+                    }
+                  }}
+                  onMouseLeave={() => setTooltipData(null)}
+                >
+                  <path className="chart-area" d={historyAreaPath} />
                   <path
                     className="chart-line-path"
-                    d={investedPath}
-                    stroke="#4dabf7"
-                    strokeWidth="2"
+                    d={historyPath}
+                    stroke="#2ad68d"
+                    strokeWidth="3"
                     fill="none"
-                    strokeDasharray="5,5"
                   />
+                  {investedPath && (
+                    <path
+                      className="chart-line-path"
+                      d={investedPath}
+                      stroke="#4dabf7"
+                      strokeWidth="2"
+                      fill="none"
+                      strokeDasharray="5,5"
+                    />
+                  )}
+                  {profitPath && (
+                    <path
+                      className="chart-line-path"
+                      d={profitPath}
+                      stroke="#ffd43b"
+                      strokeWidth="2"
+                      fill="none"
+                      strokeDasharray="3,3"
+                    />
+                  )}
+                  
+                  {/* Eixo Y - valores */}
+                  {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+                    const value = historyRange.min + (historyRange.max - historyRange.min) * ratio;
+                    const y = 132 - ratio * 120;
+                    return (
+                      <g key={ratio}>
+                        <line x1="8" y1={y} x2="12" y2={y} stroke="#666" strokeWidth="1" />
+                        <text x="6" y={y + 3} fontSize="8" fill="#999" textAnchor="end">
+                          {Math.round(value / 1000)}k€
+                        </text>
+                      </g>
+                    );
+                  })}
+                  
+                  {/* Eixo X - datas */}
+                  {chartSeries.map((item, index) => {
+                    if (chartSeries.length > 12 && index % 3 !== 0) return null;
+                    const x = 12 + index * (340 / (chartSeries.length - 1));
+                    const label = item.month.includes('-') 
+                      ? item.month.split('-').slice(1).reverse().join('/') 
+                      : item.month.substring(5).replace('-', '/');
+                    return (
+                      <g key={index}>
+                        <line x1={x} y1="132" x2={x} y2="136" stroke="#666" strokeWidth="1" />
+                        <text x={x} y="145" fontSize="8" fill="#999" textAnchor="middle">
+                          {label}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </svg>
+                {tooltipData && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: tooltipData.x + 10,
+                      top: tooltipData.y - 10,
+                      background: "rgba(0, 0, 0, 0.9)",
+                      color: "white",
+                      padding: "8px 12px",
+                      borderRadius: "6px",
+                      fontSize: "12px",
+                      pointerEvents: "none",
+                      zIndex: 1000,
+                      whiteSpace: "nowrap"
+                    }}
+                  >
+                    <div style={{ fontWeight: "bold", marginBottom: "4px" }}>{tooltipData.month}</div>
+                    <div style={{ color: "#2ad68d" }}>Total: {formatCurrency(tooltipData.total)}</div>
+                    {tooltipData.invested !== undefined && (
+                      <div style={{ color: "#4dabf7" }}>Invested: {formatCurrency(tooltipData.invested)}</div>
+                    )}
+                    {tooltipData.profit !== undefined && (
+                      <div style={{ color: "#ffd43b" }}>Profit: {formatCurrency(tooltipData.profit)}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: "16px", justifyContent: "center", marginTop: "8px", fontSize: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <div style={{ width: "20px", height: "3px", background: "#2ad68d" }}></div>
+                  <span>Total</span>
+                </div>
+                {investedPath && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <div style={{ width: "20px", height: "2px", background: "#4dabf7", borderTop: "2px dashed #4dabf7" }}></div>
+                    <span>Invested</span>
+                  </div>
                 )}
                 {profitPath && (
-                  <path
-                    className="chart-line-path"
-                    d={profitPath}
-                    stroke="#ffd43b"
-                    strokeWidth="2"
-                    fill="none"
-                    strokeDasharray="3,3"
-                  />
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <div style={{ width: "20px", height: "2px", background: "#ffd43b", borderTop: "2px dotted #ffd43b" }}></div>
+                    <span>Profit</span>
+                  </div>
                 )}
-                
-                {/* Eixo Y - valores */}
-                {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-                  const value = historyRange.min + (historyRange.max - historyRange.min) * ratio;
-                  const y = 132 - ratio * 120;
-                  return (
-                    <g key={ratio}>
-                      <line x1="8" y1={y} x2="12" y2={y} stroke="#666" strokeWidth="1" />
-                      <text x="6" y={y + 3} fontSize="8" fill="#999" textAnchor="end">
-                        {Math.round(value / 1000)}k€
-                      </text>
-                    </g>
-                  );
-                })}
-                
-                {/* Eixo X - datas */}
-                {chartSeries.map((item, index) => {
-                  if (chartSeries.length > 12 && index % 3 !== 0) return null;
-                  const x = 12 + index * (340 / (chartSeries.length - 1));
-                  const label = item.month.includes('-') 
-                    ? item.month.split('-').slice(1).reverse().join('/') 
-                    : item.month.substring(5).replace('-', '/');
-                  return (
-                    <g key={index}>
-                      <line x1={x} y1="132" x2={x} y2="136" stroke="#666" strokeWidth="1" />
-                      <text x={x} y="145" fontSize="8" fill="#999" textAnchor="middle">
-                        {label}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
-              {tooltipData && (
-                <div
-                  style={{
-                    position: "absolute",
-                    left: tooltipData.x + 10,
-                    top: tooltipData.y - 10,
-                    background: "rgba(0, 0, 0, 0.9)",
-                    color: "white",
-                    padding: "8px 12px",
-                    borderRadius: "6px",
-                    fontSize: "12px",
-                    pointerEvents: "none",
-                    zIndex: 1000,
-                    whiteSpace: "nowrap"
-                  }}
-                >
-                  <div style={{ fontWeight: "bold", marginBottom: "4px" }}>{tooltipData.month}</div>
-                  <div style={{ color: "#2ad68d" }}>Total: {formatCurrency(tooltipData.total)}</div>
-                  {tooltipData.invested !== undefined && (
-                    <div style={{ color: "#4dabf7" }}>Invested: {formatCurrency(tooltipData.invested)}</div>
-                  )}
-                  {tooltipData.profit !== undefined && (
-                    <div style={{ color: "#ffd43b" }}>Profit: {formatCurrency(tooltipData.profit)}</div>
-                  )}
-                </div>
-              )}
-            </div>
+              </div>
+            </>
           ) : (
             <p className="chart-sub">{t.charts.noHistory}</p>
           )}
@@ -777,42 +845,80 @@ function CockpitOverview({ t, token, portfolio }: CockpitProps) {
           )}
         </article>
 
+        {portfolio?.id === -1 && (
+          <article className="cockpit-card cockpit-subportfolios-summary">
+            <header>
+              <h3>Sub-portfolios</h3>
+              <span className="chart-sub">Individual portfolio breakdown</span>
+            </header>
+            {subPortfolios.length > 0 ? (
+              <div className="cockpit-list">
+                {subPortfolios.map((sub) => (
+                  <div className="cockpit-list-row" key={sub.id}>
+                    <div>
+                      <strong>{sub.name}</strong>
+                      <span>{formatCurrency(sub.total)}</span>
+                    </div>
+                    <div className="cockpit-list-metric">
+                      <span className={sub.profit >= 0 ? "pos" : "neg"}>
+                        {formatSignedCurrency(sub.profit)}
+                      </span>
+                      <span className={sub.profit_percent >= 0 ? "pos" : "neg"}>
+                        {formatSignedPercent(sub.profit_percent)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="chart-sub">No sub-portfolios available</p>
+            )}
+          </article>
+        )}
+
         <article className="cockpit-card cockpit-realestate">
           <header>
             <h3>{t.cockpit.realEstateTitle}</h3>
-            <span className="chart-sub">{t.cockpit.realEstateSubtitle}</span>
+            <span className="chart-sub">Monthly Income</span>
           </header>
           <div className="cockpit-income-box">
-            <span className="chart-sub">{t.cockpit.realEstateSubtitle}</span>
-            <strong>{formatCurrency(0)}</strong>
+            <span className="chart-sub">Total Monthly Income (WIP)</span>
+            <strong>{formatCurrency(1000)}</strong>
           </div>
           <div className="cockpit-list">
             <div className="cockpit-list-row">
               <div className="cockpit-item-title">
-                <span className="cockpit-icon rental-icon" aria-hidden />
+                <img 
+                  src="/home rent 2.PNG" 
+                  alt="Rental" 
+                  style={{ width: "24px", height: "24px", marginRight: "8px" }} 
+                />
                 <div>
                   <strong>Rental Properties</strong>
-                  <span>0 units</span>
+                  <span>WIP</span>
                 </div>
               </div>
               <div className="cockpit-list-metric">
-                <span className="pos">{formatCurrency(0)}</span>
+                <span className="pos">{formatCurrency(800)}/month</span>
               </div>
             </div>
             <div className="cockpit-list-row">
               <div className="cockpit-item-title">
-                <span className="cockpit-icon reit-icon" aria-hidden />
+                <img 
+                  src="/REITs logo 2.PNG" 
+                  alt="REITs" 
+                  style={{ width: "24px", height: "24px", marginRight: "8px" }} 
+                />
                 <div>
                   <strong>REITs</strong>
-                  <span>0 holdings</span>
+                  <span>WIP</span>
                 </div>
               </div>
               <div className="cockpit-list-metric">
-                <span className="pos">{formatCurrency(0)}</span>
+                <span className="pos">{formatCurrency(200)}/month</span>
               </div>
             </div>
           </div>
-          <p className="chart-sub">{t.cockpit.realEstateEmpty}</p>
         </article>
 
         <article className="cockpit-card cockpit-debt">
