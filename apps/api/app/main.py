@@ -10813,6 +10813,248 @@ async def admin_upload_tickers_excel(
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
 
+@app.post("/admin/tickers/update-fixed-from-excel")
+async def admin_update_fixed_ticker_data(
+    file: UploadFile,
+    authorization: str | None = Header(default=None)
+) -> dict:
+    """Atualiza apenas dados fixos dos tickers (Name, Class, Sector, Country, Currency) via Excel."""
+    _require_admin(authorization)
+    
+    if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="File must be Excel format (.xlsx or .xls)")
+    
+    try:
+        import openpyxl
+        import tempfile
+        import os
+        
+        content = await file.read()
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+        
+        wb = openpyxl.load_workbook(tmp_path)
+        ws = wb.active
+        
+        # Expected columns: Ticker, Name, Class, Sector, Country, Currency
+        headers = []
+        data_rows = []
+        
+        for idx, row in enumerate(ws.iter_rows(values_only=True), 1):
+            if idx == 1:  # Header row
+                headers = [str(cell).strip().lower() if cell else "" for cell in row]
+                continue
+            
+            if not row or not row[0]:  # Skip empty rows
+                continue
+            
+            data_rows.append(row)
+        
+        os.unlink(tmp_path)
+        
+        # Validate headers
+        required = ['ticker', 'name', 'class', 'sector', 'country', 'currency']
+        if not all(req in headers for req in required):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Missing required columns. Expected: {', '.join(required)}"
+            )
+        
+        # Get column indices
+        ticker_idx = headers.index('ticker')
+        name_idx = headers.index('name')
+        class_idx = headers.index('class')
+        sector_idx = headers.index('sector')
+        country_idx = headers.index('country')
+        currency_idx = headers.index('currency')
+        
+        success_count = 0
+        errors = []
+        
+        now = datetime.utcnow().isoformat()
+        
+        with _db_connection() as conn:
+            for row in data_rows:
+                try:
+                    ticker = str(row[ticker_idx]).strip().upper() if row[ticker_idx] else None
+                    if not ticker:
+                        continue
+                    
+                    name = str(row[name_idx]).strip() if row[name_idx] else ticker
+                    asset_class = str(row[class_idx]).strip() if row[class_idx] else "Stock"
+                    sector = str(row[sector_idx]).strip() if row[sector_idx] else None
+                    country = str(row[country_idx]).strip() if row[country_idx] else None
+                    currency = str(row[currency_idx]).strip().upper() if row[currency_idx] else "USD"
+                    
+                    # Update only fixed fields, preserve API-fetched data
+                    conn.execute(
+                        """
+                        INSERT INTO ticker_metadata (
+                            ticker, name, asset_class, sector, country, currency, 
+                            industry, region, exchange, dividend_yield, dividend_frequency, 
+                            next_dividend_date, next_dividend_amount, last_updated
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?)
+                        ON CONFLICT(ticker) DO UPDATE SET
+                            name = excluded.name,
+                            asset_class = excluded.asset_class,
+                            sector = excluded.sector,
+                            country = excluded.country,
+                            currency = excluded.currency,
+                            last_updated = excluded.last_updated
+                        """,
+                        (ticker, name, asset_class, sector, country, currency, now),
+                    )
+                    success_count += 1
+                    
+                except Exception as e:
+                    errors.append({"ticker": ticker if 'ticker' in locals() else "unknown", "error": str(e)})
+        
+        return {
+            "status": "completed",
+            "success": success_count,
+            "errors": len(errors),
+            "error_details": errors[:10]  # Limit error details
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
+
+@app.post("/admin/tickers/update-all-from-excel")
+async def admin_update_all_from_excel(
+    file: UploadFile,
+    authorization: str | None = Header(default=None)
+) -> dict:
+    """Atualiza todos os dados dos tickers via Excel (todos os campos)."""
+    _require_admin(authorization)
+    
+    if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="File must be Excel format (.xlsx or .xls)")
+    
+    try:
+        import openpyxl
+        import tempfile
+        import os
+        
+        content = await file.read()
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+        
+        wb = openpyxl.load_workbook(tmp_path)
+        ws = wb.active
+        
+        headers = []
+        data_rows = []
+        
+        for idx, row in enumerate(ws.iter_rows(values_only=True), 1):
+            if idx == 1:  # Header row
+                headers = [str(cell).strip().lower() if cell else "" for cell in row]
+                continue
+            
+            if not row or not row[0]:  # Skip empty rows
+                continue
+            
+            data_rows.append(row)
+        
+        os.unlink(tmp_path)
+        
+        # Expected columns (all fields)
+        required = ['ticker']
+        if 'ticker' not in headers:
+            raise HTTPException(status_code=400, detail="Missing 'ticker' column")
+        
+        # Get all column indices
+        col_map = {header: idx for idx, header in enumerate(headers)}
+        
+        success_count = 0
+        errors = []
+        
+        now = datetime.utcnow().isoformat()
+        
+        with _db_connection() as conn:
+            for row in data_rows:
+                try:
+                    ticker = str(row[col_map['ticker']]).strip().upper() if col_map.get('ticker') is not None and row[col_map['ticker']] else None
+                    if not ticker:
+                        continue
+                    
+                    # Extract all available fields
+                    name = str(row[col_map.get('name', -1)]).strip() if col_map.get('name') is not None and len(row) > col_map.get('name', -1) and row[col_map.get('name', -1)] else ticker
+                    asset_class = str(row[col_map.get('class', -1)]).strip() if col_map.get('class') is not None and len(row) > col_map.get('class', -1) and row[col_map.get('class', -1)] else "Stock"
+                    sector = str(row[col_map.get('sector', -1)]).strip() if col_map.get('sector') is not None and len(row) > col_map.get('sector', -1) and row[col_map.get('sector', -1)] else None
+                    industry = str(row[col_map.get('industry', -1)]).strip() if col_map.get('industry') is not None and len(row) > col_map.get('industry', -1) and row[col_map.get('industry', -1)] else None
+                    country = str(row[col_map.get('country', -1)]).strip() if col_map.get('country') is not None and len(row) > col_map.get('country', -1) and row[col_map.get('country', -1)] else None
+                    region = str(row[col_map.get('region', -1)]).strip() if col_map.get('region') is not None and len(row) > col_map.get('region', -1) and row[col_map.get('region', -1)] else None
+                    currency = str(row[col_map.get('currency', -1)]).strip().upper() if col_map.get('currency') is not None and len(row) > col_map.get('currency', -1) and row[col_map.get('currency', -1)] else "USD"
+                    exchange = str(row[col_map.get('exchange', -1)]).strip() if col_map.get('exchange') is not None and len(row) > col_map.get('exchange', -1) and row[col_map.get('exchange', -1)] else None
+                    
+                    # Dividend fields (optional)
+                    dividend_yield = None
+                    if col_map.get('dividend_yield') is not None and len(row) > col_map.get('dividend_yield', -1) and row[col_map.get('dividend_yield', -1)]:
+                        try:
+                            dividend_yield = float(row[col_map['dividend_yield']])
+                        except:
+                            pass
+                    
+                    dividend_frequency = str(row[col_map.get('dividend_frequency', -1)]).strip() if col_map.get('dividend_frequency') is not None and len(row) > col_map.get('dividend_frequency', -1) and row[col_map.get('dividend_frequency', -1)] else None
+                    next_dividend_date = str(row[col_map.get('next_dividend_date', -1)]).strip() if col_map.get('next_dividend_date') is not None and len(row) > col_map.get('next_dividend_date', -1) and row[col_map.get('next_dividend_date', -1)] else None
+                    
+                    next_dividend_amount = None
+                    if col_map.get('next_dividend_amount') is not None and len(row) > col_map.get('next_dividend_amount', -1) and row[col_map.get('next_dividend_amount', -1)]:
+                        try:
+                            next_dividend_amount = float(row[col_map['next_dividend_amount']])
+                        except:
+                            pass
+                    
+                    # Insert or update all fields
+                    conn.execute(
+                        """
+                        INSERT INTO ticker_metadata (
+                            ticker, name, asset_class, sector, industry, country, region, 
+                            currency, exchange, dividend_yield, dividend_frequency, 
+                            next_dividend_date, next_dividend_amount, last_updated
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(ticker) DO UPDATE SET
+                            name = excluded.name,
+                            asset_class = excluded.asset_class,
+                            sector = excluded.sector,
+                            industry = excluded.industry,
+                            country = excluded.country,
+                            region = excluded.region,
+                            currency = excluded.currency,
+                            exchange = excluded.exchange,
+                            dividend_yield = excluded.dividend_yield,
+                            dividend_frequency = excluded.dividend_frequency,
+                            next_dividend_date = excluded.next_dividend_date,
+                            next_dividend_amount = excluded.next_dividend_amount,
+                            last_updated = excluded.last_updated
+                        """,
+                        (ticker, name, asset_class, sector, industry, country, region, 
+                         currency, exchange, dividend_yield, dividend_frequency, 
+                         next_dividend_date, next_dividend_amount, now),
+                    )
+                    success_count += 1
+                    
+                except Exception as e:
+                    errors.append({"ticker": ticker if 'ticker' in locals() else "unknown", "error": str(e)})
+        
+        return {
+            "status": "completed",
+            "success": success_count,
+            "errors": len(errors),
+            "error_details": errors[:10]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
+
 @app.post("/admin/tickers/fetch-metadata")
 def admin_fetch_ticker_metadata(
     ticker: str,

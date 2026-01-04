@@ -70,6 +70,10 @@ function AdminBackoffice({ token }: AdminBackofficeProps) {
   const [excelUploading, setExcelUploading] = useState(false);
   const [excelTickers, setExcelTickers] = useState<string[]>([]);
   
+  // Excel enriched upload
+  const [enrichedFile, setEnrichedFile] = useState<File | null>(null);
+  const [enrichedUploading, setEnrichedUploading] = useState(false);
+  
   // Fetch metadata
   const [fetchingMetadata, setFetchingMetadata] = useState(false);
   const [fetchProgress, setFetchProgress] = useState(0);
@@ -282,6 +286,98 @@ function AdminBackoffice({ token }: AdminBackofficeProps) {
     } finally {
       setFetchingMetadata(false);
       setFetchProgress(0);
+    }
+  };
+
+  const handleUpdateFixedData = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!enrichedFile) {
+      setError("Please select an Excel file.");
+      return;
+    }
+    
+    setEnrichedUploading(true);
+    setError("");
+    setMessage("");
+    
+    try {
+      const formData = new FormData();
+      formData.append("file", enrichedFile);
+      
+      const response = await fetch(`${API_BASE}/admin/tickers/update-fixed-from-excel`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.detail || "Failed to update fixed data.");
+      }
+      
+      const successMsg = `✓ Updated ${data.success} ticker${data.success > 1 ? 's' : ''} (fixed data only).`;
+      const errorMsg = data.errors > 0 ? ` ${data.errors} error${data.errors > 1 ? 's' : ''}.` : "";
+      setMessage(successMsg + errorMsg);
+      
+      if (data.error_details && data.error_details.length > 0) {
+        console.group("⚠️ Update Fixed Data Errors:");
+        data.error_details.forEach((err: any) => {
+          console.error(`${err.ticker}: ${err.error}`);
+        });
+        console.groupEnd();
+      }
+      
+      loadMetadata();
+      setEnrichedFile(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update fixed data.");
+    } finally {
+      setEnrichedUploading(false);
+    }
+  };
+
+  const handleUpdateAllFromExcel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!enrichedFile) {
+      setError("Please select an Excel file.");
+      return;
+    }
+    
+    setEnrichedUploading(true);
+    setError("");
+    setMessage("");
+    
+    try {
+      const formData = new FormData();
+      formData.append("file", enrichedFile);
+      
+      const response = await fetch(`${API_BASE}/admin/tickers/update-all-from-excel`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.detail || "Failed to update from Excel.");
+      }
+      
+      const successMsg = `✓ Updated ${data.success} ticker${data.success > 1 ? 's' : ''} (all data).`;
+      const errorMsg = data.errors > 0 ? ` ${data.errors} error${data.errors > 1 ? 's' : ''}.` : "";
+      setMessage(successMsg + errorMsg);
+      
+      if (data.error_details && data.error_details.length > 0) {
+        console.group("⚠️ Update All Data Errors:");
+        data.error_details.forEach((err: any) => {
+          console.error(`${err.ticker}: ${err.error}`);
+        });
+        console.groupEnd();
+      }
+      
+      loadMetadata();
+      setEnrichedFile(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update from Excel.");
+    } finally {
+      setEnrichedUploading(false);
     }
   };
 
@@ -515,6 +611,45 @@ function AdminBackoffice({ token }: AdminBackofficeProps) {
                 </div>
               </div>
             )}
+          </section>
+
+          <section className="admin-section">
+            <h3>Update Ticker Data from Enriched Excel</h3>
+            <p className="chart-sub">
+              Upload an enriched Excel file with complete ticker information. 
+              Template: <code>backoffice_files/Tickers_Enriched_Template.xlsx</code>
+            </p>
+            <form className="admin-form">
+              <div className="admin-form-row">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => setEnrichedFile(e.target.files?.[0] || null)}
+                  disabled={enrichedUploading}
+                />
+                <button 
+                  type="button"
+                  onClick={handleUpdateFixedData}
+                  disabled={enrichedUploading || !enrichedFile} 
+                  className="ghost-btn"
+                  style={{ marginRight: "10px" }}
+                >
+                  {enrichedUploading ? "Updating..." : "Update Only Fixed Data"}
+                </button>
+                <button 
+                  type="button"
+                  onClick={handleUpdateAllFromExcel}
+                  disabled={enrichedUploading || !enrichedFile} 
+                  className="primary-btn"
+                >
+                  {enrichedUploading ? "Updating..." : "Update All From File"}
+                </button>
+              </div>
+              <p className="chart-sub" style={{ marginTop: "10px", fontSize: "0.85rem" }}>
+                <strong>Update Only Fixed Data:</strong> Updates Ticker, Name, Class, Sector, Country, Currency (preserves API data)<br/>
+                <strong>Update All From File:</strong> Updates all fields from Excel (overrides API data)
+              </p>
+            </form>
           </section>
 
           <section className="admin-section">
