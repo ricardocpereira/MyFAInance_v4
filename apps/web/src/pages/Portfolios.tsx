@@ -210,7 +210,9 @@ function Portfolios({
     if (portfolio?.id === -1 && snapshots.length > 0) {
       return snapshots.map(snapshot => ({
         month: snapshot.snapshot_date, // Use full date for snapshots
-        total: snapshot.total_value
+        total: snapshot.total_value,
+        invested: snapshot.total_invested,
+        profit: snapshot.total_profit
       })).sort((a, b) => a.month.localeCompare(b.month));
     }
     return [...historyMonthly].sort((a, b) => a.month.localeCompare(b.month));
