@@ -12,6 +12,7 @@ import Portfolios from "./pages/Portfolios";
 import WipPage from "./pages/WipPage";
 import Login from "./pages/Login";
 import Holdings from "./pages/Holdings";
+import RealEstate from "./pages/RealEstate";
 import BankingTransactions from "./pages/BankingTransactions";
 import CockpitOverview from "./pages/CockpitOverview";
 import Debts from "./pages/Debts";
@@ -505,6 +506,20 @@ function App() {
             }
           />
           <Route path="/stocks" element={<Navigate to="/holdings" replace />} />
+          <Route
+            path="/real-estate"
+            element={
+              isAuthenticated ? (
+                <RealEstate
+                  t={t}
+                  token={authToken}
+                  portfolio={activePortfolio}
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
           <Route
             path="/transactions"
             element={
