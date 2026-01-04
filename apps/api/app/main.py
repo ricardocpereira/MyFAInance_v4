@@ -861,6 +861,18 @@ def _init_db() -> None:
                 updated_at TEXT NOT NULL,
                 UNIQUE(portfolio_id, category)
             );
+            CREATE TABLE IF NOT EXISTS aggregated_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_email TEXT NOT NULL,
+                snapshot_date TEXT NOT NULL,
+                total_value REAL NOT NULL,
+                total_invested REAL NOT NULL,
+                total_profit REAL NOT NULL,
+                profit_percent REAL NOT NULL,
+                totals_by_category_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(owner_email, snapshot_date)
+            );
             CREATE TABLE IF NOT EXISTS banking_institutions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 portfolio_id INTEGER NOT NULL,
@@ -8986,6 +8998,136 @@ def delete_goal_contribution(
 def list_portfolios(authorization: str | None = Header(default=None)) -> dict:
     session = _require_session(authorization)
     items = _list_portfolios(session["email"])
+    return {"items": items}
+
+
+@app.get("/portfolios/aggregated/summary")
+def aggregated_portfolio_summary(authorization: str | None = Header(default=None)) -> dict:
+    """Retorna o sumário agregado de todos os portfolios do utilizador."""
+    session = _require_session(authorization)
+    portfolios = _list_portfolios(session["email"])
+    
+    if not portfolios:
+        return {
+            "totals_by_category": {},
+            "total": 0.0,
+            "total_invested": 0.0,
+            "total_profit": 0.0,
+            "profit_percent": 0.0,
+            "irr": None,
+        }
+    
+    # Aggregate totals from all portfolios
+    all_totals = {}
+    total_invested_all = 0.0
+    total_profit_all = 0.0
+    
+    for portfolio in portfolios:
+        portfolio_id = portfolio["id"]
+        categories = _filter_categories(json.loads(portfolio["categories_json"]))
+        _ensure_category_settings(portfolio_id, categories)
+        settings = _get_category_settings(portfolio_id)
+        settings_lookup = {_normalize_text(key): value for key, value in settings.items()}
+        
+        (
+            totals,
+            total_invested,
+            total_profit,
+            investment_current_total,
+            cash_investment,
+        ) = _aggregate_latest_totals(portfolio_id, settings_lookup)
+        
+        if totals:
+            for category, value in totals.items():
+                all_totals[category] = all_totals.get(category, 0.0) + value
+            total_invested_all += total_invested or 0.0
+            total_profit_all += total_profit or 0.0
+    
+    total_value = sum(all_totals.values())
+    profit_percent = (
+        round((total_profit_all / total_invested_all) * 100, 2)
+        if total_invested_all
+        else 0.0
+    )
+    
+    return {
+        "totals_by_category": all_totals,
+        "total": round(total_value, 2),
+        "total_invested": round(total_invested_all, 2),
+        "total_profit": round(total_profit_all, 2),
+        "profit_percent": profit_percent,
+        "irr": None,  # IRR calculation would need all portfolio transactions
+    }
+
+
+@app.post("/portfolios/aggregated/snapshot")
+def create_aggregated_snapshot(authorization: str | None = Header(default=None)) -> dict:
+    """Cria um snapshot do portfolio agregado para tracking de evolução."""
+    session = _require_session(authorization)
+    portfolios = _list_portfolios(session["email"])
+    
+    if not portfolios:
+        raise HTTPException(status_code=400, detail="No portfolios found.")
+    
+    # Get aggregated summary
+    summary = aggregated_portfolio_summary(authorization)
+    
+    now = datetime.utcnow().isoformat()
+    snapshot_date = datetime.utcnow().date().isoformat()
+    
+    with _db_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO aggregated_snapshots (
+                owner_email,
+                snapshot_date,
+                total_value,
+                total_invested,
+                total_profit,
+                profit_percent,
+                totals_by_category_json,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                session["email"],
+                snapshot_date,
+                summary["total"],
+                summary["total_invested"],
+                summary["total_profit"],
+                summary["profit_percent"],
+                json.dumps(summary["totals_by_category"]),
+                now,
+            ),
+        )
+        snapshot_id = cursor.lastrowid
+    
+    return {
+        "status": "created",
+        "snapshot_id": snapshot_id,
+        "snapshot_date": snapshot_date,
+        "total_value": summary["total"],
+    }
+
+
+@app.get("/portfolios/aggregated/snapshots")
+def list_aggregated_snapshots(authorization: str | None = Header(default=None)) -> dict:
+    """Lista todos os snapshots do portfolio agregado."""
+    session = _require_session(authorization)
+    
+    with _db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, snapshot_date, total_value, total_invested, 
+                   total_profit, profit_percent, created_at
+            FROM aggregated_snapshots
+            WHERE owner_email = ?
+            ORDER BY snapshot_date DESC
+            """,
+            (session["email"],),
+        ).fetchall()
+    
+    items = [dict(row) for row in rows]
     return {"items": items}
 
 

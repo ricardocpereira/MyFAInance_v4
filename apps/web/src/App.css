@@ -939,6 +939,26 @@
   color: #0b1a21;
 }
 
+.portfolio-chip.aggregated {
+  background: linear-gradient(135deg, #ff6b6b, #ff8787);
+  color: #0b1a21;
+  font-weight: 700;
+  border: 2px solid rgba(255, 107, 107, 0.4);
+}
+
+.portfolio-chip.create-snapshot {
+  background: linear-gradient(135deg, #4dabf7, #339af0);
+  color: #fff;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 2px solid rgba(77, 171, 247, 0.4);
+}
+
+.portfolio-chip.create-snapshot:hover {
+  background: linear-gradient(135deg, #339af0, #228be6);
+}
+
 .portfolio-management-chip {
   flex: 0 0 auto;
   display: inline-flex;
@@ -962,6 +982,21 @@
   padding: 6px 14px;
   font-size: 12px;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dashboard-tab.portfolio-analytics-tab {
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.dashboard-tab .tab-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
 }
 
 .dashboard-tab.active {

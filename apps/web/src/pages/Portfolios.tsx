@@ -415,7 +415,13 @@ function Portfolios({
     let active = true;
     setAllocationLoading(true);
     setAllocationError("");
-    fetch(`${API_BASE}/portfolios/${portfolio.id}/summary`, {
+    
+    // Use aggregated endpoint if portfolio ID is -1 (Aggregated Portfolio)
+    const endpoint = portfolio.id === -1 
+      ? `${API_BASE}/portfolios/aggregated/summary`
+      : `${API_BASE}/portfolios/${portfolio.id}/summary`;
+    
+    fetch(endpoint, {
       headers: {
         Authorization: `Bearer ${token}`
       }
@@ -461,6 +467,12 @@ function Portfolios({
   useEffect(() => {
     if (!portfolio) {
       setInstitutions([]);
+      return;
+    }
+    // Skip institutions for aggregated portfolio (ID -1)
+    if (portfolio.id === -1) {
+      setInstitutions([]);
+      setInstitutionsLoading(false);
       return;
     }
     let active = true;
@@ -524,6 +536,13 @@ function Portfolios({
     if (!portfolio) {
       setHistoryMonthly([]);
       setHistoryDaily([]);
+      return;
+    }
+    // Skip history for aggregated portfolio (ID -1) - will use snapshots instead
+    if (portfolio.id === -1) {
+      setHistoryMonthly([]);
+      setHistoryDaily([]);
+      setHistoryLoading(false);
       return;
     }
     let active = true;
@@ -677,10 +696,15 @@ function Portfolios({
         <div className="dashboard-tabs">
           <button
             type="button"
-            className={`dashboard-tab${view === "overview" ? " active" : ""}`}
+            className={`dashboard-tab portfolio-analytics-tab${view === "overview" ? " active" : ""}`}
             onClick={() => onViewChange("overview")}
           >
-            {t.portfolio.overviewTab}
+            <img 
+              src="/Portfolio analytics.png" 
+              alt="Portfolio Analytics" 
+              className="tab-icon"
+            />
+            Portfolio Analytics
           </button>
           <button
             type="button"

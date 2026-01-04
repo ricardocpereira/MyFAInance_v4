@@ -252,8 +252,30 @@ function App() {
     }
   };
 
+  const handleCreateSnapshot = async () => {
+    if (!authToken) return;
+    
+    try {
+      const response = await fetch(`${API_BASE}/portfolios/aggregated/snapshot`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`
+        }
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.detail || "Failed to create snapshot");
+      }
+      alert(`Snapshot created successfully!\nDate: ${data.snapshot_date}\nTotal: ${data.total_value}`);
+    } catch (err) {
+      alert(`Error creating snapshot: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  };
+
   const activePortfolio =
-    portfolios.find((item) => item.id === selectedPortfolioId) || portfolios[0];
+    selectedPortfolioId === -1
+      ? { id: -1, name: "Aggregated Portfolio", currency: "EUR", categories: [] }
+      : portfolios.find((item) => item.id === selectedPortfolioId) || portfolios[0];
 
   return (
     <div className="app">
@@ -341,6 +363,15 @@ function App() {
           {location.pathname === "/portfolios" ? (
             <section className="portfolio-strip">
               <div className="portfolio-row">
+                <button
+                  className={`portfolio-chip aggregated${
+                    selectedPortfolioId === -1 ? " active" : ""
+                  }`}
+                  type="button"
+                  onClick={() => setSelectedPortfolioId(-1)}
+                >
+                  📊 Aggregated Portfolio
+                </button>
                 <div className="portfolio-chips">
                   {portfolios.length === 0 ? (
                     <span className="portfolio-empty">{t.portfolio.emptyMessage}</span>
@@ -359,6 +390,15 @@ function App() {
                     ))
                   )}
                 </div>
+                {selectedPortfolioId === -1 && (
+                  <button
+                    className="portfolio-chip create-snapshot"
+                    type="button"
+                    onClick={handleCreateSnapshot}
+                  >
+                    📸 Create Snapshot
+                  </button>
+                )}
               </div>
             </section>
           ) : null}
