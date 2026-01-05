@@ -9003,7 +9003,35 @@ def list_portfolios(authorization: str | None = Header(default=None)) -> dict:
 
 @app.get("/portfolios/aggregated/summary")
 def aggregated_portfolio_summary(authorization: str | None = Header(default=None)) -> dict:
-    """Retorna o sumário agregado de todos os portfolios do utilizador."""
+    """
+    Get aggregated summary of all user portfolios.
+    
+    This endpoint combines data from all portfolios belonging to the authenticated user
+    into a single unified view. It's essential for the "Aggregated Portfolio" feature.
+    
+    Args:
+        authorization: Bearer token from request header
+    
+    Returns:
+        dict: {
+            "totals_by_category": {"Stocks": 10000.0, "Bonds": 5000.0, ...},
+            "total": 15000.0,              # Total portfolio value
+            "total_invested": 12000.0,     # Total amount invested
+            "total_profit": 3000.0,        # Total profit/loss
+            "profit_percent": 25.0,        # Percentage profit
+            "irr": None                    # IRR calculation placeholder
+        }
+    
+    Notes:
+        - Returns zeros if user has no portfolios
+        - Aggregates categories from all portfolios
+        - Uses weighted average for profit_percent
+        - Special portfolio ID -1 triggers this endpoint in frontend
+    
+    Example:
+        GET /portfolios/aggregated/summary
+        Authorization: Bearer eyJ...
+    """
     session = _require_session(authorization)
     portfolios = _list_portfolios(session["email"])
     
@@ -9065,7 +9093,48 @@ def create_aggregated_snapshot(
     payload: dict,
     authorization: str | None = Header(default=None)
 ) -> dict:
-    """Cria um snapshot do portfolio agregado para tracking de evolução."""
+    """
+    Create a snapshot of the aggregated portfolio for time-series tracking.
+    
+    Snapshots allow users to track portfolio evolution over time by capturing
+    the current state of all portfolios at a specific date. This enables
+    historical analysis and performance visualization in charts.
+    
+    Args:
+        payload: {
+            "snapshot_date": "2026-01-05"  # Optional, defaults to today
+        }
+        authorization: Bearer token from request header
+    
+    Returns:
+        dict: {
+            "status": "created",
+            "snapshot_id": 123,
+            "snapshot_date": "2026-01-05",
+            "total_value": 15000.0,
+            "total_invested": 12000.0,
+            "total_profit": 3000.0,
+            "message": "Snapshot created successfully"
+        }
+    
+    Database:
+        - Uses INSERT OR REPLACE to handle duplicate dates
+        - UNIQUE constraint on (owner_email, snapshot_date)
+        - Stores category breakdown as JSON string
+    
+    Raises:
+        HTTPException 400: Invalid date format or no portfolios
+        HTTPException 401: Unauthorized
+    
+    Example:
+        POST /portfolios/aggregated/snapshot?snapshot_date=2026-01-05
+        Authorization: Bearer eyJ...
+    
+    Notes:
+        - Backfills historical data with current values
+        - Useful for creating historical baseline
+        - Chart automatically uses snapshots for aggregated view
+    """
     session = _require_session(authorization)
     portfolios = _list_portfolios(session["email"])
     
