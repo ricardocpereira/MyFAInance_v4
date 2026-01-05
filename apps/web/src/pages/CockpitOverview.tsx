@@ -425,10 +425,11 @@ function CockpitOverview({ t, token, portfolio, portfolios }: CockpitProps) {
     if (historySeries.length) {
       return historySeries;
     }
+    // Always show chart with current value if we have summary
     if (summary) {
       return [
-        { month: "start", total: summary.total },
-        { month: "current", total: summary.total }
+        { month: "start", total: summary.total, invested: summary.total_invested, profit: summary.total_profit },
+        { month: "current", total: summary.total, invested: summary.total_invested, profit: summary.total_profit }
       ];
     }
     return [];

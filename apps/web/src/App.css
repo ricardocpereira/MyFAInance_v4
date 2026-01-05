@@ -2963,6 +2963,11 @@
   min-height: 280px;
 }
 
+.cockpit-subportfolios-summary {
+  grid-column: span 4;
+  min-height: 280px;
+}
+
 .cockpit-summary,
 .cockpit-budget,
 .cockpit-realestate {
